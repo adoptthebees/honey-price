@@ -105,9 +105,12 @@ output { margin-left: 0.4em; color: var(--accent-ink); font-weight: 700; font-va
   background: var(--ink);
   color: #fff;
   font-size: 0.8rem;
-  white-space: nowrap;
+  white-space: normal;
+  width: max-content;
+  max-width: min(290px, 100%);
   transform: translate(-50%, -135%);
 }
+.tip.below { transform: translate(-50%, 40%); }
 
 .split { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 #detail { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
@@ -177,6 +180,7 @@ th[aria-sort="descending"] button.sort::after { content: "\25BC"; font-size: 0.7
 .quality ul { margin: 8px 0 0; padding-left: 20px; }
 .quality li { margin: 4px 0; }
 .quality a, .sources a { color: var(--accent-ink); }
+.quality h3 span { font-weight: 400; }
 
 .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 980px) { .charts { grid-template-columns: minmax(0, 1fr); } }
@@ -195,3 +199,39 @@ th[aria-sort="descending"] button.sort::after { content: "\25BC"; font-size: 0.7
 .sources .src { color: var(--muted); font-size: 0.85rem; }
 .sources ul { margin: 6px 0; padding-left: 20px; }
 .sources li { margin: 4px 0; }
+
+.hit { cursor: pointer; }
+
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 4px; color: var(--muted); font-size: 0.76rem; }
+.legend .key { display: inline-flex; align-items: center; gap: 4px; }
+.legend a { color: var(--accent-ink); }
+.swatch { display: inline-block; width: 16px; height: 10px; border-radius: 2px; }
+.swatch.band { background: rgba(143, 85, 0, 0.25); }
+.swatch.prov { background: var(--select); border: 1px solid #f0d9a0; }
+.swatch.strip { background: linear-gradient(90deg, #3f8f5a, #c9a227, #d9822b, #b3402e); }
+
+.conf {
+  display: inline-block;
+  min-width: 1.9em;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  cursor: help;
+  font-variant-numeric: tabular-nums;
+}
+.conf-high { background: #dff1e6; color: #1b5a33; }
+.conf-medium { background: #f8efc4; color: #6b5200; }
+.conf-low { background: #fbe0c8; color: #7a3d00; }
+.conf-vlow { background: #f6d6cf; color: #8a2a1a; }
+
+.facts dd small { display: block; margin-top: 1px; color: var(--muted); font-size: 0.78rem; font-weight: 400; }
+.facts dd .conf { margin-left: 8px; }
+
+@media (max-width: 600px) { td .conf { display: none; } }
+
+/* The score is out of a copied selection: pasted into a spreadsheet, "980.6" and "80" would join as 980.680. */
+.conf { -webkit-user-select: none; user-select: none; }

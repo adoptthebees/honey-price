@@ -53,6 +53,9 @@
     <section class="panel quality" aria-labelledby="quality-title">
       <h2 id="quality-title">How reliable is <span id="quality-year"></span>?</h2>
       <ul id="quality-list"></ul>
+      <h3>How FAO got the production figures, <span id="quality-range"></span></h3>
+      <div id="quality-chart" class="chart"></div>
+      <p class="note">Each bar is one year. It shows what share of the production of the listed countries FAO got as official figures, as estimates, by imputation, or from other organizations. The chart shows the raw data: the switch does not change it.</p>
     </section>
 
     <div class="charts">
@@ -110,6 +113,15 @@
         <li>United States, 2024 price. The USDA report of <a href="https://www.nass.usda.gov/Publications/Todays_Reports/reports/hony0325.pdf" target="_blank" rel="noopener noreferrer">14 March 2025</a> gave $2.69 per pound. The report of <a href="https://esmis.nal.usda.gov/sites/default/release-files/795818/hony0326.pdf" target="_blank" rel="noopener noreferrer">13 March 2026</a> gives $2.41, because more 2024 honey sold in 2025. The FAOSTAT price file dated 2026-10-09 still had $2.69.</li>
         <li>United States, 2024 production. FAOSTAT has 60,960 tonnes. USDA has 134,393 thousand pounds, which is about 60,960 tonnes. They agree.</li>
       </ul>
+
+      <h3 id="confidence-method">How the confidence score and the ranges are made</h3>
+      <p>FAOSTAT publishes no confidence intervals and no error estimates. The score and the ranges on this page are estimates that this tool makes from the data. They are not FAO figures, and they are not statistical confidence intervals of the measurement.</p>
+      <p><strong>Range.</strong> An official figure has no range: nothing in FAOSTAT measures its error, and it can still be revised. A value that FAO estimated or imputed, or took from another organization, has a range of about 90%. The range is the size of the miss of a guess made from the neighboring years.</p>
+      <p>For each country the script takes the official years that have two official neighbors, and measures how far the value is from the mean of its neighbors on a log scale. The robust spread of these misses is the scale of the country. A country with few such years borrows the scale of countries of a similar size. The range is the value, multiplied and divided by K times that scale. K is the 90th percentile of the standardized misses of official values: <span id="cm-k"></span>. Where the data show that a kind of value misses its neighbors by more than an official value does, the range is made wider by a factor: <span id="cm-class"></span>. All other kinds have the factor 1. No range is wider than a factor of <span id="cm-cap"></span> in either direction.</p>
+      <p id="cm-test"></p>
+      <p><strong>Score.</strong> The score is a number from 0 to 100. It is a rubric, not a probability. The weights are a judgment, not a measurement. The rules are:</p>
+      <ul id="cm-rubric"></ul>
+      <p><strong>Limits.</strong> The ranges assume that an FAO estimate is about as good as a guess from the neighbors. A low score does not mean that the value is wrong, and a high score does not mean that the value is exact. The score cannot see an error that a country repeats in every year. Where an estimate follows a smooth trend, the real year can differ more than the range shows.</p>
 
       <h3>What the marks mean</h3>
       <p id="flags-text"></p>

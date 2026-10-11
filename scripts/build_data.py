@@ -14,6 +14,7 @@ Run from the project directory:
     python3 scripts/build_data.py --refresh  # download the FAOSTAT files again
 
 The trade file is about 270 MB. The script uses only the Python standard library.
+Confidence scores and ranges are made by scripts/uncertainty.py.
 """
 import argparse
 import csv
@@ -26,6 +27,8 @@ import shutil
 import tempfile
 import urllib.request
 import zipfile
+
+import uncertainty  # the model in scripts/uncertainty.py
 
 BASE_URL = 'https://bulks-faostat.fao.org/production/'
 HONEY_ITEM = '1182'
@@ -64,13 +67,16 @@ SOURCES = {
         'title': 'Trade: Crops and livestock products',
         'zip': 'Trade_CropsLivestock_E_All_Data_(Normalized).zip',
         'flags': 'Trade_CropsLivestock_E_Flags.csv',
-        'tables': {'5910': 'exportQty', '5922': 'exportValue'},
-        'element_name': 'Export quantity (tonnes) and Export value (1000 USD)',
+        'tables': {'5910': 'exportQty', '5922': 'exportValue', '5610': 'importQty'},
+        'element_name': 'Export quantity (tonnes), Export value (1000 USD) and Import quantity (tonnes, used for a check)',
         'page': 'https://www.fao.org/faostat/en/#data/TCL',
         'lineage': 'https://data.fao.org/catalog/dataset/f62abf31-1def-4f03-ba9e-5dade02038dc',
     },
 }
 TABLES = ('production', 'price', 'exportQty', 'exportValue')
+CHECK_TABLES = ('importQty',)  # read only to check production against trade
+# A country has an export price only from this export quantity. The page explains why.
+MIN_EXPORT_TONNES = 100
 
 
 def download(name, cache_dir, refresh):
@@ -157,7 +163,7 @@ def is_group(code, name):
 
 
 def build(cache_dir, refresh):
-    tables = {name: {} for name in TABLES}  # name -> area code -> {year: (value, flag)}
+    tables = {name: {} for name in TABLES + CHECK_TABLES}  # name -> area code -> {year: (value, flag)}
     names, files, flag_text = {}, {}, {}
     for key, source in SOURCES.items():
         path, modified = download(source['zip'], cache_dir, refresh)
@@ -179,8 +185,8 @@ def build(cache_dir, refresh):
         }
 
     years = sorted({year
-                    for table in tables.values()
-                    for rows in table.values()
+                    for name in TABLES
+                    for rows in tables[name].values()
                     for year, (value, _) in rows.items() if value is not None})
 
     if CHINA_GROUP in tables['price'] and any(v is not None for v, _ in tables['price'][CHINA_GROUP].values()):
@@ -221,6 +227,42 @@ def build(cache_dir, refresh):
             if abs(total - w) / w > 0.01:
                 gaps.append(f'{year}: countries {total:,.0f} t, FAO World {w:,.0f} t')
 
+    # Confidence scores and ranges for every value. The method is in scripts/uncertainty.py.
+    last = len(years) - 1
+
+    def export_prices(rec, minimum):
+        """Export price in USD per tonne and its flag for each year, from `minimum` tonnes up."""
+        values, flags = [], []
+        for q, v, f in zip(rec['exportQty'], rec['exportValue'], rec['exportFlags']):
+            ok = f != ' ' and q and v and q >= minimum
+            values.append(v * 1000 / q if ok else None)
+            flags.append(f if ok else ' ')
+        return values, ''.join(flags)
+
+    def balance(rec, code):
+        imports, _ = series(tables['importQty'].get(code, {}), years)
+        return [uncertainty.balance_penalty(p, q, m)
+                for p, q, m in zip(rec['production'], rec['exportQty'], imports)]
+
+    kinds = {
+        'production': lambda rec: (rec['production'], rec['productionFlags']),
+        'price': lambda rec: (rec['price'], rec['priceFlags']),
+        'export': lambda rec: export_prices(rec, MIN_EXPORT_TONNES),
+    }
+    models = {}
+    for kind, pick in kinds.items():
+        models[kind] = uncertainty.fit({a['code']: pick(a) for a in areas})
+        for a in areas:
+            values, flags = pick(a)
+            extra = None if kind == 'price' else balance(a, str(a['code']))
+            a[kind + 'Conf'], a[kind + 'Band'] = uncertainty.score_series(
+                models[kind], kind, values, flags, last, extra)
+    world['productionConf'], world['productionBand'] = uncertainty.score_series(
+        models['production'], 'production', world['production'], world['productionFlags'], last)
+    values, flags = export_prices(world, 0)
+    world['exportConf'], world['exportBand'] = uncertainty.score_series(
+        models['export'], 'export', values, flags, last)
+
     used = {'production': set(world['productionFlags']), 'price': set(), 'trade': set(world['exportFlags'])}
     for area in areas:
         used['production'] |= set(area['productionFlags'])
@@ -240,6 +282,11 @@ def build(cache_dir, refresh):
             'sources': files,
             'flags': {key: {f: flag_text[key][f] for f in sorted(letters)}
                       for key, letters in used.items()},
+            'minExportTonnes': MIN_EXPORT_TONNES,
+            'uncertainty': {
+                'models': {kind: uncertainty.describe(model) for kind, model in models.items()},
+                'rubric': uncertainty.rubric(),
+            },
         },
         'years': years,
         'world': world,
@@ -279,6 +326,9 @@ def main():
           f"world production {data['world']['production'][-1]:,} t, {priced} areas with a producer price, "
           f"{exporters} areas with an export price")
     print('flags used:', data['meta']['flags'])
+    for kind, model in data['meta']['uncertainty']['models'].items():
+        print(f"uncertainty {kind}: K={model['k90']}, out-of-sample coverage {model['coverage']:.1%} "
+              f"of {model['checked']} official values, class factors {model['classes']}")
     if gaps:
         print('check: the FAO World export row differs from the country rows by more than 1% in:')
         for gap in gaps:
