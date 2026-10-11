@@ -10,12 +10,13 @@
   <header class="page-head">
     <h1>Honey price and production</h1>
     <p id="subtitle" class="lede"></p>
+    <p id="updated" class="note"></p>
   </header>
 
   <main id="app">
     <section class="controls" aria-label="Year, unit and data quality">
       <div class="control">
-        <label for="year">Year <output id="year-out" for="year"></output><span id="provisional" class="badge" hidden title="FAO collects the last three years again each year, so these values can change.">provisional</span></label>
+        <label for="year">Year <output id="year-out" for="year"></output><span id="provisional" class="badge" hidden title="FAO and national offices often revise the last three years, so these values can change.">provisional</span></label>
         <input id="year" type="range" step="1">
       </div>
       <div class="control" role="radiogroup" aria-labelledby="unit-label">
@@ -27,8 +28,8 @@
         </div>
       </div>
       <div class="control">
-        <label class="switch"><input type="checkbox" id="official"><span>Official figures only</span></label>
-        <p class="hint">Hides values that FAO marks as estimated, imputed or from another organization.</p>
+        <label class="switch"><input type="checkbox" id="official"><span>Official values only</span></label>
+        <p class="hint">Hides country values that FAO does not flag as official.</p>
       </div>
     </section>
 
@@ -53,9 +54,9 @@
     <section class="panel quality" aria-labelledby="quality-title">
       <h2 id="quality-title">How reliable is <span id="quality-year"></span>?</h2>
       <ul id="quality-list"></ul>
-      <h3>How FAO got the production figures, <span id="quality-range"></span></h3>
+      <h3>Where production values come from, <span id="quality-range"></span></h3>
       <div id="quality-chart" class="chart"></div>
-      <p class="note">Each bar is one year. It shows what share of the production of the listed countries FAO got as official figures, as estimates, by imputation, or from other organizations. The chart shows the raw data: the switch does not change it.</p>
+      <p class="note">Each bar splits one year of the listed countries' production by source: official, estimated, imputed or external. The switch does not change this chart.</p>
     </section>
 
     <div class="charts">
@@ -88,50 +89,54 @@
     </div>
 
     <section class="panel sources" id="sources">
-      <h2>Where these numbers come from</h2>
-      <p>All figures come from <a href="https://www.fao.org/faostat/en/#home" target="_blank" rel="noopener noreferrer">FAOSTAT</a>, the statistics database of the Food and Agriculture Organization of the United Nations (FAO). FAOSTAT does not count honey. It collects figures from national authorities, so it is one step away from the original source. The quotes below are FAO's own descriptions of each data set.</p>
+      <h2>Where the numbers come from</h2>
+      <p>All values come from <a href="https://www.fao.org/faostat/en/#home" target="_blank" rel="noopener noreferrer">FAOSTAT</a>, the statistics database of the UN Food and Agriculture Organization (FAO). FAOSTAT does not count honey itself. It collects values from national authorities. The quotes below are FAO's own descriptions.</p>
 
       <h3>Production</h3>
-      <blockquote>“The main data source is official statistics from FAO member countries. The source data can originate from surveys, administrative data and estimates based on expert observations. Which type of source is used by countries can significantly affect reliability and comparability of data. … In instances where no official data is available, data from unofficial sources (as specialized international commodity institutes i.e. Oil World, USDA etc.) may be used. If no data from either official or unofficial sources is available, data are imputed. In all cases, data are flagged accordingly.”<br>“Aggregates are the sum of available data. Aggregates include estimated data.”</blockquote>
+      <blockquote>“The main data source is official statistics from FAO member countries. The source data can originate from surveys, administrative data and estimates based on expert observations. … If no data from either official or unofficial sources is available, data are imputed. In all cases, data are flagged accordingly.”<br>“Aggregates are the sum of available data. Aggregates include estimated data.”</blockquote>
       <p class="src" id="src-production"></p>
 
       <h3>Producer price</h3>
-      <blockquote>“Agriculture producer prices are prices received by farmers for primary crops, live animals and livestock primary products as collected at the point of initial sale (prices paid at the farm gate).”<br>“The main source is official statistics from FAO member countries. Most countries report annual prices from surveys, in some cases administered prices are provided. … No information is requested, and therefore available, on sample sizes at country level.”<br>“Mostly through annual questionnaires complemented by internet data (Eurostat, some developed countries) and CountrySTAT data. Imputation of missing Price data.”</blockquote>
+      <blockquote>“Agriculture producer prices are prices received by farmers for primary crops, live animals and livestock primary products as collected at the point of initial sale (prices paid at the farm gate).”<br>“Most countries report annual prices from surveys, in some cases administered prices are provided. … No information is requested, and therefore available, on sample sizes at country level.”</blockquote>
       <p class="src" id="src-price"></p>
 
       <h3>Export price</h3>
-      <blockquote>“The data is mainly provided by UNSD, Eurostat, and other national authorities as needed. The source data is checked for outliers, trade partner data is used for non-reporting countries or missing cells, and data on food aid is added to take into account total cross-border trade flows.”<br>“UN Comtrade is the United Nations’ official global repository of international merchandise trade statistics, maintained by UNSD”<br>“For this particular data domain, data sourced from UNSD, Eurostat, and WTO and only marginally processed by FAO might be subject to additional restrictions. Please consult the copyright notice of these organizations for more details.”</blockquote>
-      <p>This page divides the export value by the export quantity. The result is a customs average. It mixes grades, pack sizes and re-exports. It is not a price quote and not a retail price.</p>
-      <p>A country has an export price here only if it exported at least 100 tonnes in that year. An average over a few tonnes is not reliable: from 2010 to 2024, 17% to 39% of the country years below 100 tonnes had prices outside $0.40 to $6 per lb, against 2% from 100 tonnes up. In 2024 the countries above the limit made 99.9% of all exported tonnage (checked on 2026-10-10). The world export price uses FAO's World row, which counts every exporter.</p>
+      <blockquote>“The data is mainly provided by UNSD, Eurostat, and other national authorities as needed. The source data is checked for outliers, trade partner data is used for non-reporting countries or missing cells, and data on food aid is added to take into account total cross-border trade flows.”</blockquote>
+      <p>This page divides export value by export quantity. The result is a customs average. It mixes grades, pack sizes and re-exports. It is not a price quote or a retail price.</p>
+      <p id="export-check"></p>
+      <p id="export-world"></p>
       <p class="src" id="src-trade"></p>
 
-      <h3>Figures change after publication</h3>
+      <h3>Values are revised after publication</h3>
       <blockquote>“The questionnaire is sent annually to countries and collects national data referring to the past three years.”</blockquote>
-      <p class="src"><a href="https://www.fao.org/statistics/data-collection/agriculture/en" target="_blank" rel="noopener noreferrer">FAO data collection, crop and livestock production questionnaire</a></p>
-      <p>So FAO collects the latest three years again each year, and national offices revise their own figures. Example, checked on 2026-10-10:</p>
+      <p class="src"><a href="https://www.fao.org/statistics/data-collection/agriculture/en" target="_blank" rel="noopener noreferrer">FAO data collection: crop and livestock production questionnaire</a></p>
+      <p>So FAO collects the latest three production years again each year, and national offices revise their own values. The page marks the last three years of all values as provisional. Example (checked 2026-10-10):</p>
       <ul>
-        <li>United States, 2024 price. The USDA report of <a href="https://www.nass.usda.gov/Publications/Todays_Reports/reports/hony0325.pdf" target="_blank" rel="noopener noreferrer">14 March 2025</a> gave $2.69 per pound. The report of <a href="https://esmis.nal.usda.gov/sites/default/release-files/795818/hony0326.pdf" target="_blank" rel="noopener noreferrer">13 March 2026</a> gives $2.41, because more 2024 honey sold in 2025. The FAOSTAT price file dated 2026-10-09 still had $2.69.</li>
-        <li>United States, 2024 production. FAOSTAT has 60,960 tonnes. USDA has 134,393 thousand pounds, which is about 60,960 tonnes. They agree.</li>
+        <li>US producer price, 2024: USDA reported <a href="https://www.nass.usda.gov/Publications/Todays_Reports/reports/hony0325.pdf" target="_blank" rel="noopener noreferrer">$2.69 per pound on 14 March 2025</a> and <a href="https://esmis.nal.usda.gov/sites/default/release-files/795818/hony0326.pdf" target="_blank" rel="noopener noreferrer">$2.41 on 13 March 2026</a>, because more 2024 honey sold in 2025. The FAOSTAT price file of 2026-10-09 still had $2.69.</li>
+        <li>US production, 2024: FAOSTAT has 60,960 tonnes (file of 2025-12-31). USDA has 134,393 thousand pounds, about 60,960 tonnes. They agree.</li>
       </ul>
 
-      <h3 id="confidence-method">How the confidence score and the ranges are made</h3>
-      <p>FAOSTAT publishes no confidence intervals and no error estimates. The score and the ranges on this page are estimates that this tool makes from the data. They are not FAO figures, and they are not statistical confidence intervals of the measurement.</p>
-      <p><strong>Range.</strong> An official figure has no range: nothing in FAOSTAT measures its error, and it can still be revised. A value that FAO estimated or imputed, or took from another organization, has a range of about 90%. The range is the size of the miss of a guess made from the neighboring years.</p>
-      <p>For each country the script takes the official years that have two official neighbors, and measures how far the value is from the mean of its neighbors on a log scale. The robust spread of these misses is the scale of the country. A country with few such years borrows the scale of countries of a similar size. The range is the value, multiplied and divided by K times that scale. K is the 90th percentile of the standardized misses of official values: <span id="cm-k"></span>. Where the data show that a kind of value misses its neighbors by more than an official value does, the range is made wider by a factor: <span id="cm-class"></span>. All other kinds have the factor 1. No range is wider than a factor of <span id="cm-cap"></span> in either direction.</p>
-      <p id="cm-test"></p>
-      <p><strong>Score.</strong> The score is a number from 0 to 100. It is a rubric, not a probability. The weights are a judgment, not a measurement. The rules are:</p>
+      <h3 id="confidence-method">How the ranges and scores are made</h3>
+      <p>FAOSTAT publishes no error for its values. The ranges and scores here are this tool's estimates. They are not FAO values and not statistical confidence intervals.</p>
+      <p><strong>Range.</strong> No value is exact, so every value has a range. The range has four parts:</p>
+      <ul id="cm-parts"></ul>
+      <p><strong>Tests.</strong></p>
+      <ul id="cm-tests"></ul>
+      <p><strong>Totals.</strong> A world total takes its range and score from the countries that add up to it. FAO flags the sum official or estimated whatever its parts are, so the flag says little. The range assumes that country errors are independent. If they are not, the range is too narrow.</p>
+      <p><strong>Score.</strong> The score runs from 5 to 90. It starts from the source of the value and loses points for each problem that the tool can measure. It is a rubric, not a probability. The weights are a judgment: no test can measure them. Hover over a score to see its deductions.</p>
       <ul id="cm-rubric"></ul>
-      <p><strong>Limits.</strong> The ranges assume that an FAO estimate is about as good as a guess from the neighbors. A low score does not mean that the value is wrong, and a high score does not mean that the value is exact. The score cannot see an error that a country repeats in every year. Where an estimate follows a smooth trend, the real year can differ more than the range shows.</p>
+      <p><strong>Limits.</strong> A low score does not make a value wrong, and a high score does not make it exact. The score cannot detect an error that a country repeats every year. In the tests, revisions of the latest year went up, so the range can sit too low for that year.</p>
 
       <h3>What the marks mean</h3>
-      <p id="flags-text"></p>
+      <ul id="flags-list"></ul>
+      <p id="flags-note"></p>
 
       <h3>What this page cannot tell you</h3>
       <ul>
         <li>It has no retail or wholesale prices. FAOSTAT has none.</li>
-        <li>All prices are in current US dollars. They are not adjusted for inflation, so a price in 1970 and a price in 2024 are not directly comparable.</li>
-        <li>Producer prices are not comparable between countries. Methods differ, and some countries report administered prices.</li>
-        <li>These figures can differ from the latest figures of a national statistics office. See the example above.</li>
+        <li>All prices are in current US dollars, not adjusted for inflation. A 1970 price and a 2024 price do not compare directly.</li>
+        <li>Producer prices do not compare across countries. Methods differ, and some countries report administered prices.</li>
+        <li>These values can differ from the latest values of a national statistics office. See the example above.</li>
       </ul>
     </section>
   </main>
@@ -140,6 +145,7 @@
 
   <noscript><p class="error">This page needs JavaScript.</p></noscript>
   <script src="data/honey_data.js"></script>
+  <script src="data/honey_status.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // Honey price and production.
 // Shows FAOSTAT "Natural honey": production, producer price, and export price.
-// Each value has a confidence score. A value that FAO did not get as an official figure also has
-// a 90% range. Both are made by scripts/uncertainty.py and explained on the page.
+// Each value has a confidence score and a range. Both are made by scripts/uncertainty.py
+// and explained on the page.
 // The data is in data/honey_data.js. Run scripts/build_data.py to make that file again.
 (() => {
   'use strict';
@@ -12,7 +12,7 @@
   if (!D) {
     const message = document.createElement('p');
     message.className = 'error';
-    message.textContent = 'The file data/honey_data.js did not load. Run scripts/build_data.py to make it.';
+    message.textContent = 'data/honey_data.js did not load. Run scripts/build_data.py to build it.';
     $('app').replaceChildren(message);
     return;
   }
@@ -32,16 +32,27 @@
   const nf = (digits) => new Intl.NumberFormat('en-US', {
     minimumFractionDigits: digits, maximumFractionDigits: digits,
   });
-  const f0 = nf(0), f1 = nf(1), f2 = nf(2), f3 = nf(3);
+  const f0 = nf(0), f1 = nf(1), f2 = nf(2), f3 = nf(3), f4 = nf(4);
+  const fSmallTonnes = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   const massBig = (tonnes, unit) => (tonnes * UNITS[unit].perTonne) / UNITS[unit].bigDiv;
   // The digits follow ref, so that the two ends of a range get the same number of digits.
+  // A zero shows as 0. A small value gets more digits, so it never reads as 0.
   function fmtMass(tonnes, unit, ref = tonnes) {
     if (tonnes == null) return DASH;
     const v = massBig(tonnes, unit);
-    if (unit === 'tonne') return f0.format(v);
+    if (v === 0) return '0';
     const r = massBig(ref, unit);
-    return (r >= 100 ? f1 : r >= 1 ? f2 : f3).format(v);
+    if (unit === 'tonne') return (r >= 10 ? f0 : fSmallTonnes).format(v);
+    return (r >= 100 ? f1 : r >= 1 ? f2 : r >= 0.01 ? f3 : f4).format(v);
+  }
+  // A mass with its unit. A mass below one big unit shows in the small unit (lb or kg).
+  function massText(tonnes, unit) {
+    if (tonnes == null) return DASH;
+    const u = UNITS[unit];
+    return unit === 'tonne' || massBig(tonnes, unit) >= 1
+      ? `${fmtMass(tonnes, unit)} ${u.big}`
+      : `${f0.format(tonnes * u.perTonne)} ${u.short}`;
   }
   const priceIn = (usdPerTonne, unit) => usdPerTonne / UNITS[unit].perTonne;
   function fmtPrice(usdPerTonne, unit) {
@@ -58,7 +69,7 @@
   const FLAG_KIND = { production: 'production', price: 'price', export: 'trade' };
   const flagText = (kind, flag) => (flag && flag !== 'A' ? (FLAGS[kind][flag] || flag) : '');
   const FLAG_ORDER = ['A', 'E', 'I', 'X', 'B'];
-  const FLAG_WORDS = { A: 'official', E: 'estimated', I: 'imputed', X: 'from other organizations', B: 'with a series break' };
+  const FLAG_WORDS = { A: 'official', E: 'estimated', I: 'imputed', X: 'external', B: 'series break' };
   const flagWord = (flag) => FLAG_WORDS[flag] || flag;
   const breakdown = (parts, total) => FLAG_ORDER.filter((f) => parts[f])
     .map((f) => `${pct(parts[f] / total)} ${flagWord(f)}`).join(', ');
@@ -128,13 +139,13 @@
   }
 
   // ---- Points ----------------------------------------------------------------
-  // A point is one value with its FAO flag, its confidence score and its 90% range.
+  // A point is one value with its FAO flag, its confidence score and its range.
   // kind is "production", "price" or "export". The value is in tonnes or in USD per tonne.
-  // The export price is the export value divided by the export quantity.
-  // A unit value from a few tonnes is mostly noise. From 2010 to 2024, 17% to 39% of the country
-  // years below 100 tonnes were outside $0.40 to $6 per lb, against 2% from 100 tonnes up.
-  // So a country has an export price only from MIN_EXPORT_TONNES. The World row has no such limit.
-  // With "Official figures only" on, a value that is not marked A is not a point.
+  // The export price is the export value divided by the export quantity. A unit value from a few
+  // tonnes is noisy (see meta.exportCheck), so a country has an export price only from
+  // MIN_EXPORT_TONNES. The World row has no such limit.
+  // With "Official values only" on, a country value that is not marked A is not a point. The
+  // World values stay: FAO adds them up from the countries, estimates included.
   function pointOf(src, kind, i) {
     let value;
     let flag;
@@ -147,10 +158,10 @@
       flag = src[kind + 'Flags'][i].trim();
       if (value == null) return null;
     }
-    if (state.official && flag !== 'A') return null;
+    if (state.official && src !== D.world && flag !== 'A') return null;
     const band = src[kind + 'Band'][i];
     const spread = Math.exp(band / 1000);
-    return { value, flag, conf: src[kind + 'Conf'][i], band, lo: value / spread, hi: value * spread };
+    return { value, flag, conf: src[kind + 'Conf'][i], band, why: (src[kind + 'Why'] || [])[i] ?? null, lo: value / spread, hi: value * spread };
   }
   const pointSeries = (src, kind) => years.map((_, i) => pointOf(src, kind, i));
 
@@ -163,8 +174,8 @@
   function emptyExport(a) {
     if (state.official) return 'No official export price.';
     return a.exportFlags.trim() !== ''
-      ? `This country never exported ${MIN_EXPORT_TONNES} tonnes or more in a year, so it has no export price here.`
-      : 'FAOSTAT has no export price for this country.';
+      ? `Exports never reached ${MIN_EXPORT_TONNES} tonnes in a year, so there is no export price.`
+      : 'FAOSTAT has no export data for this country.';
   }
 
   // How to show a value of each kind in the selected unit.
@@ -175,26 +186,51 @@
       : { num: (p) => fmtPrice(p, unit), range: (lo, hi) => `${fmtPrice(lo, unit)} to ${fmtPrice(hi, unit)}`, unit: ` per ${u.short}` };
   }
 
-  // One line that says everything about a point: value, source, range, confidence.
-  function describe(kind, p, i, extra) {
+  // What each deduction of the score means. The data file keeps the deductions of a value as text,
+  // a code letter and whole points for each deduction, such as "a10 j3" (see meta.uncertainty.rubric).
+  const WHY_LABELS = {
+    age: 'recent year, which FAO still revises',
+    jump: 'jump from the neighbor years',
+    history: 'estimated or imputed years nearby',
+    thin: 'few official years to measure this country',
+    rounding: 'figure may be rounded',
+    gap: 'producer price far from the export price',
+    supply: 'exports above production plus imports',
+  };
+  // The score as a sum, one line each: the start score of the flag, then each deduction.
+  // A World value has no deductions: its score is the mean of the country scores.
+  function scoreSteps(p, isWorld) {
+    if (p.why == null) return isWorld ? ['Mean of the country scores, weighted by size.'] : [];
+    const parts = p.why.split(' ').filter(Boolean).map((part) => [RUBRIC.codes[part[0]], Number(part.slice(1))]);
+    const taken = parts.reduce((sum, [, points]) => sum + points, 0);
+    const start = RUBRIC.base[p.flag] ?? p.conf + taken;
+    const lines = [`Score ${p.conf}: starts at ${start} (${flagWord(p.flag)})`];
+    for (const [name, points] of parts) lines.push(`\u2212${points} ${WHY_LABELS[name]}`);
+    if (start - taken !== p.conf) lines.push(`The score stays between ${RUBRIC.min} and ${RUBRIC.max}.`);
+    return lines;
+  }
+
+  // The text that says everything about a point. The first line has the value, the source, the
+  // range and the score. Then comes one line for each part of the score.
+  function describe(kind, p, i, extra, isWorld) {
     const fmt = fmtFor(kind);
     const parts = [`${years[i]}: ${fmt.num(p.value)}${fmt.unit}`];
-    parts.push(p.flag === 'A' ? 'official' : (flagText(FLAG_KIND[kind], p.flag) || p.flag).toLowerCase());
-    if (p.band) parts.push(`90% range ${fmt.range(p.lo, p.hi)}`);
+    parts.push(isWorld ? 'FAO total of the countries'
+      : p.flag === 'A' ? 'official' : (flagText(FLAG_KIND[kind], p.flag) || p.flag).toLowerCase());
+    if (p.band) parts.push(`range ${fmt.range(p.lo, p.hi)}`);
     parts.push(`confidence ${p.conf} (${tierOf(p.conf).name})`);
     if (isProvisional(years[i])) parts.push('provisional');
     if (extra) parts.push(extra);
-    return parts.join(' \u00b7 ');
+    return [parts.join(' \u00b7 '), ...scoreSteps(p, isWorld)].join('\n');
   }
   function chartTip(kind, src, i) {
     const p = pointOf(src, kind, i);
-    if (!p) return `${years[i]}: ${kind === 'export' ? 'no export price' : 'no figure'}`;
-    const u = UNITS[state.unit];
-    return describe(kind, p, i, kind === 'export' ? `${fmtMass(src.exportQty[i], state.unit)} ${u.big} exported` : null);
+    if (!p) return `${years[i]}: ${kind === 'export' ? 'no export price' : 'no value'}`;
+    return describe(kind, p, i, kind === 'export' ? `${massText(src.exportQty[i], state.unit)} exported` : null, src === D.world);
   }
   // The score is out of a copied selection (see styles.css), so a copied table keeps clean numbers.
   const confPill = (p, title) => h('span', {
-    class: `conf conf-${tierOf(p.conf).key}`, role: 'img', title, 'aria-label': `confidence ${p.conf} of 100, ${tierOf(p.conf).name}`, text: String(p.conf),
+    class: `conf conf-${tierOf(p.conf).key}`, role: 'img', title, 'aria-label': `confidence ${p.conf}, ${tierOf(p.conf).name}`, text: String(p.conf),
   });
 
   // ---- Model for one year ----------------------------------------------------
@@ -226,7 +262,7 @@
   }
 
   // For every year: the tonnes of production that each FAO flag makes, over the listed countries.
-  // This is the raw data: the switch "Official figures only" does not change it.
+  // This is the raw data: the switch "Official values only" does not change it.
   const COMPOSITION = years.map((_, i) => {
     const parts = {};
     let total = 0;
@@ -281,7 +317,7 @@
   function legend(pts, color) {
     const flags = FLAG_ORDER.filter((f) => pts.some((p) => p && p.flag === f));
     const keys = flags.map((f) => h('span', { class: 'key' }, glyph(f, color), flagWord(f)));
-    if (pts.some((p) => p && p.band)) keys.push(h('span', { class: 'key' }, h('span', { class: 'swatch band' }), '90% range'));
+    if (pts.some((p) => p && p.band)) keys.push(h('span', { class: 'key' }, h('span', { class: 'swatch band' }), 'range'));
     keys.push(h('span', { class: 'key' }, h('span', { class: 'swatch prov' }), 'provisional'));
     keys.push(h('span', { class: 'key' }, h('span', { class: 'swatch strip' }), 'confidence: high to very low'));
     keys.push(h('a', { href: '#confidence-method', text: 'How this is made' }));
@@ -388,8 +424,7 @@
     });
     if (run.length) runs.push(run);
 
-    // 1. The 90% range. It is as wide as the range of each point and a point of an
-    //    official figure has none, so the band pinches to the line there.
+    // 1. The range. The band follows the range of each point.
     for (const r of runs) {
       if (!r.some((i) => pts[i].band)) continue;
       const up = r.map((i, k) => `${k ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(hi(i)).toFixed(1)}`).join('');
@@ -500,7 +535,7 @@
 
   function compositionTip(i) {
     const c = COMPOSITION[i];
-    if (!c) return `${years[i]}: no production figures`;
+    if (!c) return `${years[i]}: no production values`;
     return `${years[i]}: ${breakdown(c.parts, c.total)} of ${fmtMass(c.total, state.unit)} ${UNITS[state.unit].big} listed`
       + (isProvisional(years[i]) ? ' \u00b7 provisional' : '');
   }
@@ -508,7 +543,7 @@
   function drawQualityChart() {
     stackChart($('quality-chart'), {
       rows: COMPOSITION,
-      label: `Share of the listed honey production by how FAO got the figure, ${years[0]} to ${lastYear}`,
+      label: `Production by source, ${years[0]} to ${lastYear}`,
       marker: yearIndex.get(state.year),
       tip: compositionTip,
       onPick: pickYear,
@@ -523,7 +558,7 @@
       color: '#c77d00',
       label: `World honey production in ${u.big}, ${years[0]} to ${lastYear}, with confidence`,
       marker,
-      empty: 'No official figures.',
+      empty: 'No values.',
       tip: (i) => chartTip('production', D.world, i),
       onPick: pickYear,
     });
@@ -534,7 +569,7 @@
       prefix: '$',
       label: `World honey export price in USD per ${u.short}, ${firstExportYear} to ${lastYear}, with confidence`,
       marker,
-      empty: 'No official figures.',
+      empty: 'No values.',
       tip: (i) => chartTip('export', D.world, i),
       onPick: pickYear,
     });
@@ -550,7 +585,7 @@
       color: '#c77d00',
       label: `${a.name}: honey production in ${u.big}, with confidence`,
       marker,
-      empty: state.official ? 'No official production figures.' : 'FAOSTAT has no production figures for this country.',
+      empty: state.official ? 'No official production values.' : 'FAOSTAT has no production values for this country.',
       tip: (i) => chartTip('production', a, i),
       onPick: pickYear,
     });
@@ -579,6 +614,11 @@
   }
 
   // ---- Cards -----------------------------------------------------------------
+  // The World export row should match the country rows. The build lists the years in which it does not.
+  const worldGapOf = (year) => (D.meta.worldExportGaps || []).find((g) => g.year === year);
+  const worldGapText = (g) => `FAO's world total is ${fmtShare(Math.abs(g.countries - g.world) / g.countries)} `
+    + `${g.world < g.countries ? 'below' : 'above'} the sum of the countries.`;
+
   function renderCards(model) {
     const unit = state.unit, u = UNITS[unit], i = model.i;
 
@@ -586,30 +626,28 @@
     $('card-production').textContent = wp ? `${fmtMass(wp.value, unit)} ${u.big}` : DASH;
     const other = unit === 'tonne' ? 'lb' : 'tonne';
     if (wp) {
-      const note = flagText('production', wp.flag);
-      $('card-production-sub').textContent = `${fmtMass(wp.value, other)} ${UNITS[other].big} in ${state.year}.`
-        + (note ? ` ${note}.` : '')
-        + (wp.band ? ` 90% range ${fmtMass(wp.lo, unit)} to ${fmtMass(wp.hi, unit)} ${u.big}.` : '')
+      const c = COMPOSITION[i];
+      $('card-production-sub').textContent = `${fmtMass(wp.value, other)} ${UNITS[other].big}.`
+        + (c ? ` ${pct((c.parts.A || 0) / c.total)} of the listed production is official.` : '')
+        + (wp.band ? ` Range ${fmtMass(wp.lo, unit, wp.hi)} to ${fmtMass(wp.hi, unit, wp.hi)} ${u.big}.` : '')
         + ` Confidence ${wp.conf} (${tierOf(wp.conf).name}).`;
     } else {
-      $('card-production-sub').textContent = D.world.production[i] == null
-        ? `No figure for ${state.year}.` : `FAO has no official world total for ${state.year}.`;
+      $('card-production-sub').textContent = `No value for ${state.year}.`;
     }
 
     // The world export price uses the World row of FAOSTAT: export value divided by export quantity.
     const we = pointOf(D.world, 'export', i);
     if (!we) {
       $('card-export').textContent = DASH;
-      $('card-export-sub').textContent = D.world.exportFlags[i] === ' '
-        ? `FAOSTAT has no export figures for ${state.year}.` : `FAO has no official world export figures for ${state.year}.`;
+      $('card-export-sub').textContent = `FAOSTAT has no export values for ${state.year}.`;
     } else {
-      const exporters = model.rows.filter((r) => r.pe);
-      const total = exporters.reduce((sum, r) => sum + r.exportQty, 0);
-      const official = exporters.filter((r) => r.pe.flag === 'A').reduce((sum, r) => sum + r.exportQty, 0);
+      const q = qualityFor(state.year);
+      const gap = worldGapOf(state.year);
       $('card-export').textContent = `${fmtPrice(we.value, unit)} per ${u.short}`;
-      $('card-export-sub').textContent = `Customs value divided by quantity. ${fmtMass(D.world.exportQty[i], unit)} ${u.big} exported in ${state.year}. `
-        + (state.official || !total ? 'Official figures only. ' : `${pct(official / total)} of the tonnage is official. `)
-        + `Confidence ${we.conf} (${tierOf(we.conf).name}).`;
+      $('card-export-sub').textContent = `Export value divided by export quantity. ${massText(D.world.exportQty[i], unit)} exported.`
+        + (q.expT ? ` ${pct((q.exp.A || 0) / q.expT)} of the tonnage is official.` : '')
+        + ` Range ${fmtPrice(we.lo, unit)} to ${fmtPrice(we.hi, unit)}. Confidence ${we.conf} (${tierOf(we.conf).name}).`
+        + (gap ? ` ${worldGapText(gap)}` : '');
     }
 
     const priced = model.rows.filter((r) => r.pc).sort((x, y) => x.price - y.price);
@@ -620,7 +658,7 @@
     } else {
       const low = priced[0], high = priced[priced.length - 1];
       $('card-range').textContent = `${fmtPrice(low.price, unit)} to ${fmtPrice(high.price, unit)} per ${u.short}`;
-      $('card-range-sub').textContent = `${low.a.name} to ${high.a.name}. ${priced.length} countries have a price.`;
+      $('card-range-sub').textContent = `${low.a.name} (lowest) to ${high.a.name} (highest). ${priced.length} countries have a price.`;
     }
   }
 
@@ -630,26 +668,25 @@
     $('quality-year').textContent = state.year;
     const items = [];
     if (q.listed > 0) {
-      const world = q.world == null ? ''
-        : ` The world total is ${q.worldFlag === 'A' ? 'official' : flagWord(q.worldFlag)}. The listed countries add up to ${fmtShare(q.listed / q.world)} of it.`;
-      items.push(`Production: ${breakdown(q.prod, q.listed)} of the listed production.${world}`);
+      const world = q.world == null ? '' : ` The listed countries make ${fmtShare(q.listed / q.world)} of the world total.`;
+      items.push(`Production by source: ${breakdown(q.prod, q.listed)}.${world}`);
       const t = q.tiers;
-      items.push(`Confidence: of ${t.high + t.medium + t.low + t.vlow} countries with a production figure, ${t.high} score high (80 or more), `
-        + `${t.medium} medium, ${t.low} low and ${t.vlow} very low (under 40).`);
+      items.push(`Production confidence, ${t.high + t.medium + t.low + t.vlow} countries: ${t.high} high (80 or more), ${t.medium} medium (60 to 79), `
+        + `${t.low} low (40 to 59), ${t.vlow} very low (under 40).`);
     } else {
-      items.push(`Production: FAOSTAT has no figures for ${state.year}.`);
+      items.push(`Production: FAOSTAT has no values for ${state.year}.`);
     }
     items.push(q.nPrice
-      ? `Producer price: ${q.nPrice} countries have a price. By count, ${breakdown(q.price, q.nPrice)}.`
+      ? `Producer price: ${q.nPrice} countries, ${breakdown(q.price, q.nPrice)}.`
       : `Producer price: FAOSTAT has none for ${state.year}.`);
     items.push(q.nExp
-      ? `Export price: ${q.nExp} countries exported at least ${MIN_EXPORT_TONNES} tonnes and have a price. By tonnage, ${breakdown(q.exp, q.expT)}. `
-        + `${q.smallN} smaller exporters have no price here, because an average over a few tonnes is not reliable. They make ${pct(q.smallT / (q.expT + q.smallT))} of the tonnage.`
+      ? `Export price: ${q.nExp} countries exported ${MIN_EXPORT_TONNES} tonnes or more. By tonnage, ${breakdown(q.exp, q.expT)}. `
+        + `${q.smallN} smaller exporters have no price, because small exports give noisy averages. They export ${pct(q.smallT / (q.expT + q.smallT))} of the tonnage.`
       : (q.smallN ? `Export price: no country exported ${MIN_EXPORT_TONNES} tonnes or more.` : `Export price: FAOSTAT has none for ${state.year}.`));
     const list = items.map((text) => h('li', { text }));
     if (isProvisional(state.year)) {
       list.push(h('li', {},
-        `${state.year} is provisional. FAO collects the last three years again each year, and national offices revise recent figures. `,
+        `${state.year} is provisional: FAO and national offices revise the last three years. `,
         h('a', { href: '#sources', text: 'See an example.' })));
     }
     $('quality-list').replaceChildren(...list);
@@ -718,8 +755,8 @@
         h('td', { class: 'num', text: fmtShare(r.share) }),
         valueCell('price', r.pc, fmtPrice(r.price, unit), i),
         valueCell('export', r.pe, fmtPrice(r.exportPrice, unit), i,
-          r.exportQty != null ? `${r.a.name} exported ${fmtMass(r.exportQty, unit)} ${u.big}`
-            : r.exportSmall != null ? `${r.a.name} exported only ${fmtMass(r.exportSmall, unit)} ${u.big}. That is too little for a reliable price.` : null),
+          r.exportQty != null ? `${r.a.name} exported ${massText(r.exportQty, unit)}`
+            : r.exportSmall != null ? `${r.a.name} exported only ${massText(r.exportSmall, unit)}. That is too little for a reliable price.` : null),
       );
       frag.append(tr);
     }
@@ -728,14 +765,14 @@
     const count = (key) => model.rows.filter((r) => r[key] != null).length;
     const listed = model.rows.reduce((sum, r) => sum + (r.production || 0), 0);
     const listedShare = model.world ? listed / model.world : null;
-    const gap = listedShare != null && listedShare < 0.9995
-      ? ` The listed countries add up to ${fmtShare(listedShare)} of the world total. The rest is in the world total but has no country row in FAOSTAT.` : '';
-    $('table-note').textContent = `${shown.length} of ${model.rows.length} countries and areas for ${state.year}. `
-      + `${count('price')} have a producer price and ${count('exportPrice')} have an export price (at least ${MIN_EXPORT_TONNES} tonnes exported). Shares use the FAOSTAT world total.${gap} `
-      + 'The table lists China, mainland and Taiwan Province of China as two rows. FAOSTAT "China" is their sum. '
-      + 'The small number after a value is its confidence score from 0 to 100: hover it for the details. '
-      + 'The letter E, I or X marks a value that FAO did not get as an official figure.'
-      + (state.official ? ' Official figures only: values that FAO marks E, I or X are hidden.' : '');
+    const gap = !state.official && listedShare != null && listedShare < 0.9995
+      ? ` The listed countries make ${fmtShare(listedShare)} of it. The rest has no country row in FAOSTAT.` : '';
+    $('table-note').textContent = `${shown.length} of ${model.rows.length} countries and areas in ${state.year}. `
+      + `${count('price')} have a producer price and ${count('exportPrice')} an export price (${MIN_EXPORT_TONNES} tonnes or more exported). `
+      + `Shares use the FAOSTAT world total.${gap} `
+      + 'FAOSTAT "China" is the sum of China, mainland and Taiwan Province of China, so the table lists those two. '
+      + 'The small number after a value is its confidence score (5 to 90). A letter after a value (E, I, X or B) means the value is not official.'
+      + (state.official ? ' "Official values only" is on: the table hides non-official values. Shares still use the full world total.' : '');
   }
 
   // ---- Detail panel ----------------------------------------------------------
@@ -745,7 +782,7 @@
     if (!a) {
       box.replaceChildren(
         h('h2', { text: 'Country detail' }),
-        h('p', { class: 'note', text: 'Select a country in the table to see its production and price history.' }),
+        h('p', { class: 'note', text: 'Select a country in the table to see its production, producer price and export price over time.' }),
       );
       return;
     }
@@ -754,11 +791,11 @@
     const share = pp && model.world ? pp.value / model.world : null;
     const expFlag = a.exportFlags[i].trim();
     const exportedQty = expFlag && (!state.official || expFlag === 'A') ? a.exportQty[i] : null;
-    // A fact: the value, its confidence score, and its range if it has one.
+    // A fact: the value, its confidence score and its range.
     const fact = (label, kind, p, text) => [
       h('dt', { text: label }),
       h('dd', {}, text, p ? confPill(p, describe(kind, p, i)) : null,
-        p && p.band ? h('small', { text: `90% range ${fmtFor(kind).range(p.lo, p.hi)}` }) : null),
+        p && p.band ? h('small', { text: `range ${fmtFor(kind).range(p.lo, p.hi)}` }) : null),
     ];
     box.replaceChildren(
       h('div', { class: 'panel-head' },
@@ -770,9 +807,9 @@
         h('dd', { text: fmtShare(share) }),
         fact(`Producer price ${state.year}`, 'price', pc, pc ? `${fmtPrice(pc.value, unit)} per ${u.short}` : DASH),
         fact(`Export price ${state.year}`, 'export', pe,
-          pe ? `${fmtPrice(pe.value, unit)} per ${u.short}` : (exportedQty != null ? `${DASH} (under ${MIN_EXPORT_TONNES} t)` : DASH)),
+          pe ? `${fmtPrice(pe.value, unit)} per ${u.short}` : (exportedQty != null ? `${DASH} (under ${MIN_EXPORT_TONNES} tonnes)` : DASH)),
         h('dt', { text: `Exported ${state.year}` }),
-        h('dd', { text: exportedQty == null ? DASH : `${fmtMass(exportedQty, unit)} ${u.big}` })),
+        h('dd', { text: exportedQty == null ? DASH : massText(exportedQty, unit) })),
       h('h3', { text: `Production (${u.big})` }),
       h('div', { id: 'detail-production', class: 'chart' }),
       h('h3', { text: `Producer price (USD per ${u.short})` }),
@@ -799,42 +836,80 @@
     const marks = (kind) => Object.entries(meta.flags[kind])
       .filter(([flag]) => flag !== 'M')
       .map(([flag, text]) => `${flag} = ${text}`).join('; ');
-    $('flags-text').textContent = `Production: ${marks('production')}. Producer price: ${marks('price')}. `
-      + `Export price: ${marks('trade')}. An export price takes the weaker mark of its export value and its export quantity. `
-      + 'The switch "Official figures only" keeps only the values marked A.';
+    $('flags-list').replaceChildren(...[['Production', 'production'], ['Producer price', 'price'], ['Export price', 'trade']]
+      .map(([label, kind]) => h('li', { text: `${label}: ${marks(kind)}.` })));
+    $('flags-note').textContent = 'An export price takes the weaker mark of its value and its quantity. '
+      + 'The switch "Official values only" keeps the values marked A.';
 
-    // The method of the confidence score and the ranges, with the numbers of this data set.
+    // The export price: the numbers of the page come from the build, so they follow the data.
+    const c = meta.exportCheck;
+    $('export-check').textContent = c
+      ? `The page shows an export price for a country only when it exports ${c.minTonnes} tonnes or more in the year, because small exports give noisy averages. `
+        + `From ${c.fromYear} to ${c.toYear}, ${fmtShare(c.smallOutside[0])} to ${fmtShare(c.smallOutside[1])} of country years below ${c.minTonnes} tonnes `
+        + `had a price outside $${c.lowPerLb.toFixed(2)} to $${c.highPerLb.toFixed(2)} per lb, against ${fmtShare(c.largeOutside)} from ${c.minTonnes} tonnes up. `
+        + `In ${c.toYear}, the countries above the limit made ${fmtShare(c.aboveShare)} of the tonnage that countries exported.`
+      : '';
+    const gaps = meta.worldExportGaps || [];
+    $('export-world').textContent = `The world export price uses the world total of FAO, which also counts exporters below ${meta.minExportTonnes} tonnes.`
+      + (gaps.length ? ` The world total differs from the sum of the countries in ${gaps.map((g) => `${g.year} (${fmtShare(Math.abs(g.countries - g.world) / g.countries)} ${g.world < g.countries ? 'below' : 'above'})`).join(', ')}.` : '');
+
+    // The method of the ranges and the scores, with the numbers of this data set.
+    const r = RUBRIC, b = r.base, e = r.evidence;
     const names = { production: 'production', price: 'producer price', export: 'export price' };
-    const each = (fn) => Object.entries(names).map(([k, name]) => fn(models[k], name));
-    $('cm-k').textContent = each((m, name) => `${name} ${m.k90.toFixed(2)}`).join(', ')
-      + ' (a normal curve would give 1.64)';
-    $('cm-cap').textContent = String(RUBRIC.cap);
+    const andList = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items.join(''));
+    const perKind = (fn) => andList(Object.entries(names).map(([k, name]) => `${name} ${fn(k)}`));
+    const share = (x) => `${+(x * 100).toFixed(1)}%`;           // 0.015 becomes 1.5%
+    const whole = (x) => `${Math.round(x * 100)}%`;
+    const pm = (x) => `\u00b1${share(x)}`;
     const widened = [];
     for (const [kind, name] of Object.entries(names)) {
-      for (const [flag, c] of Object.entries(models[kind].classes)) {
-        if (c.factor > 1) widened.push(`${name}, ${flagWord(flag)}: \u00d7${c.factor} (measured on ${c.n} values)`);
+      for (const [flag, k] of Object.entries(models[kind].classes)) {
+        if (k.factor > 1) widened.push(`${name}, ${flagWord(flag)}: \u00d7${k.factor} (measured on ${k.n} values)`);
       }
     }
-    $('cm-class').textContent = widened.length ? widened.join('; ') : 'none';
-    $('cm-test').textContent = 'Test: for each official figure that has two official neighbors, the tool hid the figure, made a range from the neighbors, and looked at whether the range contained the figure. '
-      + 'The countries were split in two halves: K was learned on one half and tried on the other, and then the halves were swapped. '
-      + 'The range contained the figure ' + each((m, name) => `${(m.coverage * 100).toFixed(1)}% of the time for ${name} (${f0.format(m.checked)} figures)`).join(', ')
-      + '. This shows that the ranges have the right size for a guess made from the neighbors. It does not show how far FAO estimates are from the truth.';
-    const r = RUBRIC, b = r.base;
+    $('cm-parts').replaceChildren(...[
+      `Reporting error (an assumption): ${perKind((k) => pm(r.report[k]))}.`,
+      'Revision (an assumption): FAO and national offices revise the last three years. For the latest year, the year before and the year before that: '
+        + `production ${andList(r.revision.production.map(pm))}; producer price ${andList(r.revision.price.map(pm))}; export price ${andList(r.revision.export.map(pm))}.`,
+      'Rounding: a value that ends in zeros is rounded, so 24,000 can mean 23,500 to 24,500.',
+      'Estimate error, for estimated, imputed and external values only: the tool guesses each official value from its two neighbors and measures the miss. '
+        + `K says how far a guess can miss: 90% of official values miss by less than K times the scale of their country. K is ${perKind((k) => models[k].k90.toFixed(2))} (a normal curve gives 1.64). `
+        + (widened.length ? `A flag with larger misses than official values widens the range: ${widened.join('; ')}. ` : '')
+        + `For production the estimate error is multiplied by ${r.estimateScale.production} (see the revision test). `
+        + `No range is more than ${r.cap} times the value, up or down.`,
+    ].map((text) => h('li', { text })));
+    $('cm-tests').replaceChildren(...[
+      'Neighbor test: the tool hid each official value that has two official neighbors and made a range from the neighbors. '
+        + 'It learned K on half of the countries and tested it on the other half. The range held '
+        + andList(Object.entries(names).map(([k, name]) => `${(models[k].coverage * 100).toFixed(1)}% of ${f0.format(models[k].checked)} ${name} values`)) + '.',
+      `Revision test (production, ${e.date}): the tool compared three older FAOSTAT versions (${e.releases.join(', ')}) with the version of ${e.against}. `
+        + `In the last year of an old version, the range held ${whole(e.official.held)} of ${e.official.n} official values. `
+        + `In all years, it held ${whole(e.estimates.held)} of ${e.estimates.n} estimates that a country later replaced with an official value. `
+        + `Without the \u00d7${r.estimateScale.production} multiplier it held ${whole(e.estimates.heldWithoutScale)} of them.`,
+      `World total test: the range of the World total, made from the countries of an old version, held ${whole(e.world.held)} of ${e.world.n} years. `
+        + `In the last year of each old version, FAO later raised the World total by ${andList(e.world.latestChange.map(share))}.`,
+      `USDA revised its first estimates for US honey, ${e.usda.years}, by at most ${share(e.usda.production)} for production and ${share(e.usda.price)} for price.`,
+      'Producer price and export price have no older versions to test.',
+    ].map((text) => h('li', { text })));
+    const ck = r.checks;
     $('cm-rubric').replaceChildren(...[
-      `Start from the source: official ${b.A}, other organization ${b.X}, series break ${b.B}, estimated ${b.E}, imputed ${b.I}.`,
-      `Subtract ${r.age.production.join(', ')} for the latest year and the two before it (production and export price). `
-        + `Subtract ${r.age.price.join(', ')} for producer price, because prices are revised more.`,
-      `Subtract ${r.fit[0]} if the value is farther from its neighbors than K times the scale of the country, and ${r.fit[1]} if it is farther than 1.5 times that.`,
-      `Subtract ${r.borrowed} if the country has fewer than ${r.minRuns} official years with official neighbors, so that its scale is borrowed.`,
-      `Subtract ${r.balance[1][1]} or ${r.balance[0][1]} if exports are more than ${Math.round((r.balance[1][0] - 1) * 100)}% or ${Math.round((r.balance[0][0] - 1) * 100)}% above production plus imports (production and export price).`,
-      `The score stays between ${r.min} and ${r.max}. High is 80 or more, medium 60 to 79, low 40 to 59, very low under 40.`,
+      `Start from the source: official ${b.A}, external ${b.X}, series break ${b.B}, estimated ${b.E}, imputed ${b.I}.`,
+      `Age: subtract ${r.age.production.join(', ')} for the latest year and the two before it (production and export price), or ${r.age.price.join(', ')} for producer price.`,
+      `Each check below takes points in proportion to the problem that it measures, in whole points, up to a maximum. A small problem costs a point or two. There is no free zone, so scores differ from value to value.`,
+      `Jump, up to ${ck.jump.most}: how far a value is from its neighbor years, in units of K times the scale of its country. The maximum comes at ${ck.jump.full} units. `
+        + `The first year, the latest year and a year beside a gap have one neighbor: the tool then measures the step from that neighbor against K1 (${perKind((k) => models[k].k1.toFixed(2))}), the 90th percentile of official steps.`,
+      `History, up to ${ck.history.most}: the share of the ${r.historyYears} years around the value that are not official.`,
+      `Few official years, up to ${ck.thin.most}: a country with fewer than ${r.minRuns} official years with official neighbors has no scale of its own, so the tool borrows one from similar countries. The fewer such years, the more points.`,
+      `Rounding, up to ${ck.rounding.most}: a figure that ends in zeros can hide rounding. The points grow with the share of the figure that the rounding can hide.`,
+      `Price gap, up to ${ck.gap.most} (producer price and export price): how far the ratio of the two prices of one country and year is from the usual ratio of that country. The tool needs ${r.minGapYears} years with both prices.`,
+      `Supply, up to ${ck.supply.most} (production and export price): exports above production plus imports, for exports of ${r.minSupplyTonnes} tonnes or more. The maximum comes at ${Math.round(ck.supply.full * 100)}% above the supply.`,
+      `The score stays between ${r.min} and ${r.max}. High is 80 or more, medium 60 to 79, low 40 to 59, very low under 40. The weights are a judgment.`,
     ].map((text) => h('li', { text })));
 
     $('footer').replaceChildren(
       'Data: ', link('https://www.fao.org/faostat/en/#home', meta.database), ', ', meta.publisher, '. License: ',
-      link(meta.licenseUrl, meta.license), ', except that FAO says the export figures, which come from UNSD and Eurostat, might be subject to additional restrictions. ',
-      link(meta.sources.trade.lineage, 'See the FAO description.'), ` Retrieved ${meta.retrieved}. 1 lb is exactly 0.45359237 kg.`);
+      link(meta.licenseUrl, meta.license), ', except that FAO says the export values, which come from UNSD and Eurostat, may carry extra restrictions. ',
+      link(meta.sources.trade.lineage, 'See the FAO description.'), ' 1 lb is exactly 0.45359237 kg.');
   }
 
   // ---- Render ----------------------------------------------------------------
@@ -894,8 +969,12 @@
   readHash();
   $('year').min = years[0];
   $('year').max = lastYear;
-  $('subtitle').textContent = `${D.meta.item.replace(/ \(.*\)$/, '')} data from ${D.meta.database}. `
-    + `Production ${years[0]} to ${lastYear}. Producer price ${firstPriceYear} to ${lastYear}. Export price ${firstExportYear} to ${lastYear}.`;
+  $('subtitle').textContent = `${D.meta.item.replace(/ \(.*\)$/, '')} data from ${D.meta.database}: `
+    + `production ${years[0]} to ${lastYear}, producer price ${firstPriceYear} to ${lastYear}, export price ${firstExportYear} to ${lastYear}.`;
+  // The date of the build, and the date of the latest check for newer FAOSTAT files.
+  const stamp = (date) => h('time', { datetime: date, text: date });
+  const checked = (window.HONEY_STATUS || {}).checked || D.meta.retrieved;
+  $('updated').replaceChildren('Updated ', stamp(D.meta.retrieved), '. FAOSTAT last checked ', stamp(checked), '.');
   $('world-range').textContent = `${years[0]} to ${lastYear}`;
   $('price-range').textContent = `${firstExportYear} to ${lastYear}`;
   $('quality-range').textContent = `${years[0]} to ${lastYear}`;

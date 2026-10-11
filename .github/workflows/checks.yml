@@ -1,0 +1,27 @@
+name: Checks
+
+# Run the tests and the document checks on each push and pull request.
+# The vocabulary check downloads the ASD-STE100 specification and reads it with pdftotext.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Run the tests
+        run: python3 -m unittest discover -s scripts
+
+      - name: Install pdftotext
+        run: command -v pdftotext || (sudo apt-get update && sudo apt-get install --yes --no-install-recommends poppler-utils)
+
+      - name: Check the documents
+        run: python3 scripts/check_docs.py --vocabulary

@@ -12,6 +12,8 @@ The tool in this directory is for data about honey. These data include:
 
 Open `index.html` in a browser to use the tool. To make `data/honey_data.js` again, use `python3 scripts/build_data.py`.
 
+A GitHub workflow examines the FAOSTAT files each week. It makes the data file again when FAOSTAT has newer files. It also saves the status date. To do the tests, use `python3 -m unittest discover -s scripts`. The directory `DOCS/SPECS` has the specifications of the tool.
+
 ## Document names
 
 A document is a file that has text for a person to read. A file that is part of the tool is not a document. For example, HTML, JavaScript, CSS, and data files are not documents. Write each document in Markdown.
@@ -49,7 +51,7 @@ Write the text of each document in ASD-STE100 Simplified Technical English (STE)
 
 Obey these instructions:
 
-- Use only the approved words in the dictionary. Use a word that is not in the dictionary only as a technical noun or a technical verb (Rule 1.1).
+- Use only the approved words in the dictionary. Use a word that is not in the dictionary only as a technical noun or verb (Rule 1.1).
 - Use one technical noun for one item (Rule 1.11).
 - Write instructions in the imperative (Rule 5.3). Write one instruction in each sentence (Rule 5.2).
 - Write a maximum of 20 words in each sentence of an instruction (Rule 5.1).
@@ -61,7 +63,7 @@ Obey these instructions:
 - Do not use the semicolon (Rule 8.1).
 - Write "for example" and not "e.g." (GR-6).
 
-These words are not approved. Replace each word as follows:
+The dictionary has these words as not approved. Replace each word as follows:
 
 | Do not write | Write |
 |---|---|
@@ -94,8 +96,228 @@ STE lets you use a technical noun that is not in the dictionary (Rule 1.5). Thes
 - annual production
 - country
 
+These words are technical nouns for the data:
+
+- export value
+- export quantity
+- import quantity
+- retail price
+- wholesale price
+- customs average
+- kilogram
+- tonne
+- kg
+- lb
+- MB
+- US dollar
+- tonnage
+- grade
+- trade
+- element
+- series
+- series break
+- flag
+- official value
+- estimated value
+- imputed value
+- external value
+- non-official value
+- World total
+- World row
+- year
+- month
+- week
+- day
+- Monday
+- two
+
+These words are technical nouns for the statistics:
+
+- statistics
+- average
+- confidence score
+- confidence interval
+- scale
+- series scale
+- pooled scale
+- half width
+- neighbor
+- miss
+- spread
+- median
+- mean
+- percentile
+- logarithm
+- natural logarithm
+- exponential
+- square root
+- square
+- multiplier
+- class multiplier
+- estimate multiplier
+- penalty
+- rounding
+- age
+- share
+- ratio
+- normal curve
+- tail
+- parity
+- assumption
+- probability
+- revision
+- decimal
+- digit
+- whole number
+- zero
+- percent
+- jump
+- history
+- gap
+
+These words are technical nouns for the software:
+
+- software
+- computer
+- script
+- data file
+- file
+- directory
+- repository
+- workflow
+- database
+- page
+- browser
+- server
+- site
+- cache
+- command
+- option
+- request
+- endpoint
+- permission
+- branch
+- commit
+- tab
+- message
+- address
+- button
+- panel
+- mouse
+- label
+- link
+- key
+- list
+- string
+- array
+- null
+- zip
+- byte
+- schedule
+- format
+- version
+- slider
+- field
+- content
+- style
+- failure
+- warning
+- switch
+- column
+- axis
+- circle
+- diamond
+- band
+- bar
+- chart
+- table
+- status
+- JSON
+- CSV
+- HTML
+- CSS
+- JavaScript
+- Markdown
+- MD5
+- UTC
+- AI
+
+These words are technical nouns for the documents:
+
+- document
+- context document
+- specification
+- plan
+- reference
+- term
+- purpose
+- title
+- heading
+- text
+- letter
+- word
+- sentence
+- paragraph
+- rule
+- dictionary
+- noun
+- verb
+- topic
+- semicolon
+- imperative
+- path
+- note
+- license
+- issue
+
+These words are names:
+
+- FAO
+- FAOSTAT
+- USDA
+- UNSD
+- Eurostat
+- OWID
+- GitHub
+- Git
+- Internet Archive
+- China
+- Romania
+- STE
+- Simplified Technical English
+- Food and Agriculture Organization of the United Nations
+
 Add each new technical noun to this list.
+
+## Technical verbs
+
+STE lets you use a technical verb that is not in the dictionary (Rule 1.12). These words are technical verbs for the tool:
+
+- download
+- install
+- save
+- store
+- sort
+- update
+
+Add each new technical verb to this list.
+
+## Context documents
+
+A context document is a document that gives instructions or facts to an AI tool. For example, `AGENTS.md` and `CLAUDE.md` are context documents. Each context document obeys the rules in this file.
+
+The script `scripts/check_docs.py` examines each Markdown file in the repository. Thus it examines the context documents too.
+
+## Examine the documents
+
+Use `python3 scripts/check_docs.py` to examine the documents. The script examines the names, the length of the sentences and the paragraphs, and the words in the table above. It gives the exit code 1 when a document has an error.
+
+Add the option `--vocabulary` to examine each word against the dictionary. The script downloads the specification one time and keeps the word list in the temporary directory. This option uses the command `pdftotext`. The script gives the exit code 2 when it cannot read the dictionary.
+
+The script examines only files that have `.md` at the end of the name. It does not examine how you use a word. Use each word only as the dictionary gives it (Rules 1.2 and 1.3).
+
+The workflow `Checks` starts the script with the option `--vocabulary` on each push and each pull request.
 
 ## Complete a task
 
-Before you complete a task, examine each document that you write or change. Make sure that each document obeys this file.
+Before you complete a task, examine each document that you write or change. Use `python3 scripts/check_docs.py --vocabulary` for this. Make sure that the script gives no error and no warning. Make sure that each document obeys this file.

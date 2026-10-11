@@ -105,7 +105,7 @@ output { margin-left: 0.4em; color: var(--accent-ink); font-weight: 700; font-va
   background: var(--ink);
   color: #fff;
   font-size: 0.8rem;
-  white-space: normal;
+  white-space: pre-line;
   width: max-content;
   max-width: min(290px, 100%);
   transform: translate(-50%, -135%);
