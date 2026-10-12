@@ -245,3 +245,18 @@ th[aria-sort="descending"] button.sort::after { content: "\25BC"; font-size: 0.7
 
 /* The score is out of a copied selection: pasted into a spreadsheet, "980.6" and "80" would join as 980.680. */
 .conf { -webkit-user-select: none; user-select: none; }
+
+/* United States panel (us.js). */
+#us-year { margin-left: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; color: inherit; background: #fff; }
+#us-year:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.us-facts { margin: 12px 0 0; }
+#us .chart h3 { margin: 0 0 4px; font-size: 1rem; }
+.chart .tip { white-space: pre-line; }
+#us-table td:nth-child(2) { white-space: nowrap; min-width: 0; }
+#us-table td:first-child { white-space: normal; min-width: 140px; }
+#us-table tfoot td { position: sticky; bottom: 0; font-weight: 700; background: var(--head); border-top: 2px solid var(--line); }
+@media (max-width: 600px) {
+  #us-table th:first-child, #us-table td:first-child, #us-table th:nth-child(4), #us-table td:nth-child(4) { display: table-cell; }
+  #us-table th:nth-child(5), #us-table td:nth-child(5), #us-table th:nth-child(7), #us-table td:nth-child(7) { display: none; }
+  #us-table td:first-child { min-width: 84px; }
+}
