@@ -223,6 +223,11 @@ These words are technical nouns for the software:
 - panel
 - mouse
 - label
+- runner
+- dump
+- secret
+- variable
+- fixture
 - link
 - key
 - list
@@ -335,6 +340,8 @@ These words are technical nouns for the market data system:
 - SQL
 - statement
 - unique index
+- variety
+- certification
 
 These words are technical nouns for the trade data:
 
@@ -356,6 +363,8 @@ These words are technical nouns for the trade data:
 - tariff
 - stock
 - yield
+- air
+- vessel
 
 These words are names:
 
