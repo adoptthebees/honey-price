@@ -9,6 +9,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
 import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -224,6 +225,91 @@ class CurrentTests(unittest.TestCase):
     def test_not_current_without_a_file(self):
         self.assertFalse(us.is_current(None, self.DATES))
 
+
+def release_row(date, name):
+    return (f'<tr><td class="views-field views-field-release-date"><time datetime="{date}T12:00:00Z">x</time></td>'
+            f'<td class="views-field views-field-release-files"><a href="/sites/default/release-files/1/{name}.zip">zip</a></td></tr>')
+
+
+PAGER = '<ul class="pager"><li><a href="?page=1">Next</a></li><li><a href="?page=2">Last</a></li></ul>'
+EMPTY_VIEW = '<div class="js-view-dom-id-abc"><form class="views-exposed-form"></form></div>'
+
+
+class FlakyListTests(unittest.TestCase):
+    """ESMIS sometimes answers with an empty list. The script asks again and never takes a short list."""
+
+    def setUp(self):
+        self.pages = {0: release_row('2026-03-13', 'a') + PAGER, 1: release_row('2025-03-14', 'b') + PAGER,
+                      2: release_row('2024-03-15', 'c') + PAGER}
+        self.answers = []   # what each call to ajax_page gives, in sequence; None means the real page
+        self.calls = []
+        self.saved = (us.ajax_page, us.view_dom_id, us.PAUSE)
+        us.view_dom_id = lambda node, page: 'abc'
+        us.PAUSE = 0
+
+        def fake_ajax(node, number, dom_id):
+            self.calls.append(number)
+            answer = self.answers.pop(0) if self.answers else None
+            return self.pages[number] if answer is None else answer
+        us.ajax_page = fake_ajax
+
+    def tearDown(self):
+        us.ajax_page, us.view_dom_id, us.PAUSE = self.saved
+
+    def test_the_pager_gives_the_number_of_pages(self):
+        self.assertEqual(us.last_page(self.pages[0]), 2)
+        self.assertEqual(us.last_page(release_row('2026-03-13', 'a')), 0)
+
+    def test_every_page_of_the_pager_is_read(self):
+        found = us.publication_releases(1256, 'Honey', 'honey')
+        self.assertEqual([r['date'] for r in found], ['2026-03-13', '2025-03-14', '2024-03-15'])
+        self.assertEqual(self.calls, [0, 1, 2])
+
+    def test_an_empty_page_is_asked_for_again(self):
+        self.answers = [EMPTY_VIEW, EMPTY_VIEW, None, EMPTY_VIEW, None]
+        found = us.publication_releases(1256, 'Honey', 'honey')
+        self.assertEqual(len(found), 3)
+        self.assertEqual(self.calls, [0, 0, 0, 1, 1, 2])
+
+    def test_a_page_that_stays_empty_stops_the_build(self):
+        self.answers = [None] + [EMPTY_VIEW] * us.ATTEMPTS
+        with self.assertRaisesRegex(ValueError, 'page 1'):
+            us.publication_releases(1256, 'Honey', 'honey')
+
+    def test_a_list_shorter_than_the_data_file_stops_the_build(self):
+        old = {'reports': [{'date': d} for d in ('2024-03-15', '2025-03-14', '2026-03-13')]}
+        found = [{'date': '2026-03-13'}, {'date': '2025-03-14'}]
+        with self.assertRaisesRegex(ValueError, 'fewer'):
+            us.check_count(found, old)
+        us.check_count(found + [{'date': '2024-03-15'}], old)
+        us.check_count(found, None)
+
+
+class FetchRetryTests(unittest.TestCase):
+    """A name that does not resolve, or a connection that drops, is tried again."""
+
+    def test_a_network_error_is_tried_again(self):
+        saved, us.PAUSE = (us.urllib.request.urlopen, us.PAUSE), 0
+        failures = [urllib.error.URLError('name resolution')] * 2
+
+        class Response(io.BytesIO):
+            status = 200
+
+            def __enter__(self): return self
+
+            def __exit__(self, *args): return False
+        def fake_urlopen(request, timeout=None):
+            if failures:
+                raise failures.pop(0)
+            return Response(b'ok')
+        us.urllib.request.urlopen = fake_urlopen
+        try:
+            self.assertEqual(us.fetch('https://example.invalid/x'), b'ok')
+            failures[:] = [urllib.error.URLError('down')] * us.ATTEMPTS
+            with self.assertRaises(urllib.error.URLError):
+                us.fetch('https://example.invalid/x')
+        finally:
+            us.urllib.request.urlopen, us.PAUSE = saved
 
 class ScriptFileTests(unittest.TestCase):
     def setUp(self):

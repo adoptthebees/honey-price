@@ -18,13 +18,14 @@ The script uses only the Python standard library and reuses the helpers of build
 import argparse
 import csv
 import io
-import itertools
 import json
 import math
 import os
 import re
 import shutil
 import tempfile
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -35,7 +36,6 @@ BASE_URL = 'https://esmis.nal.usda.gov'
 AJAX_URL = BASE_URL + '/views/ajax'
 VIEW_NAME = 'publication_releases_indexed'
 VIEW_DISPLAY = 'all_releases_block'
-MAX_PAGES = 50  # a guard: the release list has about 5 pages of 10 rows
 # (node number, publication name, page name in the URL)
 PUBLICATIONS = [
     (1256, 'Honey', 'honey'),
@@ -85,14 +85,24 @@ TIME_DATE = re.compile(r'<time[^>]*datetime="([^"]*)"')
 HREF = re.compile(r'href="([^"]+)"')
 
 
-# ESMIS answers a request without a User-Agent with an empty release list. This one names the tool.
+# ESMIS is not always there for a runner of GitHub: a name that does not resolve, and a release
+# list that comes back empty from one of its servers. Each request is tried this many times.
 USER_AGENT = 'honey-price/1.0 (+https://github.com/adoptthebees/honey-price)'
+ATTEMPTS = 4
+PAUSE = 5  # seconds between two attempts
 
 
 def fetch(url, data=None, headers=None):
+    """The body at `url`. A network error is tried again, ATTEMPTS times in all."""
     request = urllib.request.Request(url, data=data, headers={'User-Agent': USER_AGENT, **(headers or {})})
-    with urllib.request.urlopen(request, timeout=120) as response:
-        return response.read()
+    for attempt in range(ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                return response.read()
+        except urllib.error.URLError:
+            if attempt == ATTEMPTS - 1:
+                raise
+            time.sleep(PAUSE)
 
 
 def view_dom_id(node, page):
@@ -142,21 +152,48 @@ def to_releases(rows, publication):
     return releases
 
 
+def last_page(html):
+    """The number of the last page of the release list, from the pager links. 0 without a pager."""
+    return max((int(n) for n in re.findall(r'[?&]page=(\d+)', html)), default=0)
+
+
+def publication_releases(node, publication, page):
+    """The releases with a zip file of one publication. An empty page is asked for again.
+
+    The pager on the first page gives the number of pages, so a page that ESMIS does not send
+    stops the build instead of cutting the list short.
+    """
+    dom_id = view_dom_id(node, page)
+    rows, number, last = [], 0, 0
+    while number <= last:
+        for attempt in range(ATTEMPTS):
+            html = ajax_page(node, number, dom_id)
+            page_rows = release_rows(html)
+            if page_rows:
+                break
+            if attempt == ATTEMPTS - 1:
+                raise ValueError(f'{publication}: ESMIS sent an empty release list for page {number}')
+            time.sleep(PAUSE)
+        if number == 0:
+            last = last_page(html)
+        rows += page_rows
+        number += 1
+    return to_releases(rows, publication)
+
+
 def releases():
     """Every release with a zip file of both publications, sorted by date."""
     found = []
     for node, publication, page in PUBLICATIONS:
-        dom_id = view_dom_id(node, page)
-        rows = []
-        for number in itertools.islice(itertools.count(), MAX_PAGES):
-            page_rows = release_rows(ajax_page(node, number, dom_id))
-            if not page_rows:
-                break
-            rows += page_rows
-        else:
-            raise ValueError(f'{publication}: more than {MAX_PAGES} pages of releases')
-        found += to_releases(rows, publication)
+        found += publication_releases(node, publication, page)
     return sorted(found, key=lambda r: r['date'])
+
+
+def check_count(found, old):
+    """Stop when ESMIS lists fewer releases than the data file has: the list is not complete."""
+    before = len((old or {}).get('reports') or [])
+    if len(found) < before:
+        raise ValueError(f'ESMIS lists {len(found)} releases, fewer than the {before} in the data file')
 
 
 def download(url, cache_dir, refresh):
@@ -384,7 +421,9 @@ def main():
     folder = os.path.dirname(args.out)
 
     reports = releases()
-    if args.if_changed and is_current(b.read_script(args.out, 'HONEY_US_SUPPLY'), [r['date'] for r in reports]):
+    old = b.read_script(args.out, 'HONEY_US_SUPPLY')
+    check_count(reports, old)
+    if args.if_changed and is_current(old, [r['date'] for r in reports]):
         write_status(folder, day)
         print(f'up to date: ESMIS has no report newer than {args.out}. Checked {day}.')
         return

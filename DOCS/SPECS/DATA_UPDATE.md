@@ -89,6 +89,8 @@ The script `scripts/build_us_data.py` makes the files `data/us_supply.js` and `d
 
 The option `--if-changed` gets the list of the reports from ESMIS. When each report with a zip file is in the data file, the script writes only the status file and stops. If not, the script downloads the reports that are not in its cache and makes the data file again. A downloaded file that is not complete, or is not a zip file, stops the script.
 
+ESMIS does not always give a correct response to a runner of GitHub. Some of its servers send an empty list, and the address of ESMIS is not always known to the runner. Thus the script tries each request 4 times, with 5 seconds between 2 tries. It reads the number of pages of the list from the first page. A page that does not come stops the script. The script also stops when ESMIS lists less reports than the data file has.
+
 The workflow has the same steps and the same permissions as the workflow "Update data". The message of the change is "Update US honey data from NASS" when the data file is different. It is "Record the US data status" when only the status file is different.
 
 NASS gives one report each year, in March. Thus the data file changes one time each year, and the status file changes each week.
