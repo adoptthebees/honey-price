@@ -81,7 +81,17 @@ When the workflow stops with an error, the status date on the page does not chan
 
 ## Numbers that the update does not change
 
-The update makes the data again, and the numbers that come from the data. It does not change `EVIDENCE` and `ESTIMATE_SCALE` in `scripts/uncertainty.py`. These numbers come from a test against previous versions of the production file. The file `REVISION_TEST.md` gives the test.
+The update makes the data again, and the numbers that come from the data. It does not change `EVIDENCE` and `ESTIMATE_SCALE` in `scripts/uncertainty.py`. These numbers come from a test against previous versions of the production file. The file `REVISION_TEST.md` gives the test. But `scripts/build_data.py` reads the revisions of the USDA from `data/us_supply.js` when the file is there.
+
+## United States data
+
+The script `scripts/build_us_data.py` makes the files `data/us_supply.js` and `data/us_status.js` from the reports of NASS. The file `DATA_SOURCES.md` gives the source and the fields. The workflow `.github/workflows/update-us-data.yml` starts the script each Monday at 06:17 UTC. A person can also start it, with the input `force`.
+
+The option `--if-changed` gets the list of the reports from ESMIS. When each report with a zip file is in the data file, the script writes only the status file and stops. If not, the script downloads the reports that are not in its cache and makes the data file again. A downloaded file that is not complete, or is not a zip file, stops the script.
+
+The workflow has the same steps and the same permissions as the workflow "Update data". The message of the change is "Update US honey data from NASS" when the data file is different. It is "Record the US data status" when only the status file is different.
+
+NASS gives one report each year, in March. Thus the data file changes one time each year, and the status file changes each week.
 
 ## Limits
 
