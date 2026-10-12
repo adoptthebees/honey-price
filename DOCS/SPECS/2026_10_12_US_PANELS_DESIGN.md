@@ -104,7 +104,7 @@ All data files have the same format. The first line is a note. The next part set
 | File | Value on `window` | The page gets it |
 | --- | --- | --- |
 | `data/us_status.js` | `HONEY_US_STATUS` | With the page |
-| `data/us_supply.js` | `HONEY_US_SUPPLY` | When the panel comes into view |
+| `data/us_supply.js` | `HONEY_US_SUPPLY` | With the page |
 | `data/us_quotes.js` | `HONEY_US_QUOTES` | When the panel comes into view |
 | `data/us_trade.js` | `HONEY_US_TRADE` | When the panel comes into view |
 

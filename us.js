@@ -1,6 +1,6 @@
-// The United States panel. It reads data/us_supply.js (USDA NASS honey data) and draws
-// the year facts, two charts and a state table. The data file loads only when the panel
-// first comes into view, so the rest of the page does not wait for it.
+// The United States panel and card. They read data/us_supply.js (USDA NASS honey data), which
+// loads with the page. The card at the top shows the newest year. The panel draws the year
+// facts, two charts and a state table.
 // It uses the helpers in ui.js (window.HONEY_UI).
 (() => {
   'use strict';
@@ -38,6 +38,42 @@
   function showError() {
     const target = document.getElementById('us-body');
     if (target) target.replaceChildren(h('p', { class: 'error', text: MISSING_FILE }));
+    const big = document.getElementById('card-us-big'), sub = document.getElementById('card-us-sub');
+    if (big) big.textContent = DASH;
+    if (sub) sub.textContent = MISSING_FILE;
+  }
+
+  // The card at the top of the page: the newest year of the United States, which FAOSTAT does
+  // not have yet. It is the first thing a reader sees, so it says which report it comes from.
+  function renderCard(u) {
+    const last = state.usYears[state.usYears.length - 1];
+    const us = state.rowAt.get('0:' + state.years.indexOf(last));
+    const first = state.firstAt.get(last);
+    const [, , rep, , , prod, , price] = us;
+    const report = longDate(state.data.reports[rep].date);
+    const parts = [];
+    if (price != null) parts.push(`Average price ${fmtPrice(usdPerTonneOf(price), u)} per ${UNITS[u].short}.`);
+    parts.push(`USDA NASS, report of ${report}.`);
+    if (first && first[4] == null) parts.push('First estimate: the next report can change it.');
+    const go = h('button', { type: 'button', class: 'link', text: 'See the section United States' });
+    go.addEventListener('click', () => document.getElementById('us').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    document.getElementById('card-us-title').textContent = `United States ${last}`;
+    document.getElementById('card-us-big').textContent = prod == null ? DASH : massText(tonnesOf(prod), u);
+    document.getElementById('card-us-sub').replaceChildren(parts.join(' '), ' ', go);
+  }
+
+  // The text at the top of the page says what each source covers, so a reader does not take the
+  // last FAOSTAT year for the last year of the page.
+  function describeCoverage() {
+    const first = state.usYears[0], last = state.usYears[state.usYears.length - 1];
+    const subtitle = document.getElementById('subtitle');
+    if (subtitle) subtitle.append(` United States data from USDA NASS: ${first} to ${last}.`);
+    const hint = document.getElementById('year-hint');
+    const fao = window.HONEY_DATA && window.HONEY_DATA.years;
+    if (hint && fao) {
+      hint.textContent = `FAOSTAT values end in ${fao[fao.length - 1]}. `
+        + `The United States has USDA values to ${last}: see the card and the section below.`;
+    }
   }
 
   function prepare(data) {
@@ -222,6 +258,7 @@
   function render() {
     if (!body || !state.data) return;
     const u = unit.get();
+    renderCard(u);
     const active = document.activeElement;
     const focusKey = active && active.closest && active.closest('#us-table') ? active.dataset.key : null;
     body.replaceChildren();
@@ -291,32 +328,13 @@
       clearTimeout(timer);
       timer = setTimeout(render, 150);
     });
+    describeCoverage();
     render();
-  }
-
-  function load() {
-    const script = document.createElement('script');
-    script.src = 'data/us_supply.js';
-    script.onload = () => init();
-    script.onerror = () => showError();
-    document.body.append(script);
   }
 
   const status = window.HONEY_US_STATUS;
   const statusLine = document.getElementById('us-status');
   if (status && statusLine) statusLine.textContent = `US data last checked ${status.checked}`;
 
-  // Load the data only when the panel first comes into view.
-  const section = document.getElementById('us');
-  if (section && 'IntersectionObserver' in window) {
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        io.disconnect();
-        load();
-      }
-    });
-    io.observe(section);
-  } else {
-    load();
-  }
+  init();
 })();

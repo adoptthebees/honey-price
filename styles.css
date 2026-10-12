@@ -72,7 +72,7 @@ output { margin-left: 0.4em; color: var(--accent-ink); font-weight: 700; font-va
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 .card { padding: 14px 18px; }
 .card h2 { color: var(--muted); font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-.card .big { margin: 6px 0 2px; font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.card .big { margin: 6px 0 2px; font-size: clamp(1.35rem, 1.7vw, 2rem); font-weight: 700; font-variant-numeric: tabular-nums; }
 .card .sub { margin: 0; color: var(--muted); font-size: 0.85rem; }
 
 .panel { padding: 14px 18px; }
@@ -179,6 +179,8 @@ th[aria-sort="descending"] button.sort::after { content: "\25BC"; font-size: 0.7
   vertical-align: middle;
 }
 .hint { margin: 4px 0 0; max-width: 260px; color: var(--muted); font-size: 0.8rem; }
+.hint.year { max-width: min(520px, 80vw); }
+.card .sub button.link { font-size: inherit; }
 
 .switch { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
 .switch input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }

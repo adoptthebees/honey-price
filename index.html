@@ -18,6 +18,7 @@
       <div class="control">
         <label for="year">Year <output id="year-out" for="year"></output><span id="provisional" class="badge" hidden title="FAO and national offices often revise the last three years, so these values can change.">provisional</span></label>
         <input id="year" type="range" step="1">
+        <p class="hint year" id="year-hint"></p>
       </div>
       <div class="control" role="radiogroup" aria-labelledby="unit-label">
         <span id="unit-label" class="label">Unit</span>
@@ -48,6 +49,11 @@
         <h2>Producer price range</h2>
         <p class="big" id="card-range"></p>
         <p class="sub" id="card-range-sub"></p>
+      </article>
+      <article class="card" id="card-us">
+        <h2 id="card-us-title">United States</h2>
+        <p class="big" id="card-us-big"></p>
+        <p class="sub" id="card-us-sub"></p>
       </article>
     </section>
 
@@ -95,9 +101,7 @@
       </div>
       <p class="lede">USDA NASS, Honey report. These data are newer than FAOSTAT.</p>
       <p id="us-status" class="note"></p>
-      <div id="us-body">
-        <p class="note">Loading…</p>
-      </div>
+      <div id="us-body"></div>
     </section>
 
     <section class="panel sources" id="sources">
@@ -159,6 +163,7 @@
   <script src="data/honey_data.js"></script>
   <script src="data/honey_status.js"></script>
   <script src="data/us_status.js"></script>
+  <script src="data/us_supply.js"></script>
   <script src="ui.js"></script>
   <script src="app.js"></script>
   <script src="us.js"></script>

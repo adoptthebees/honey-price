@@ -12,7 +12,7 @@ The files `data/honey_data.js`, `data/honey_status.js`, `data/us_supply.js` and 
 
 ## Controls
 
-The year control is a slider. It goes from the first year to the last year of the data. A change of the year changes all the values on the page.
+The year control is a slider. It goes from the first year to the last year of the FAOSTAT data. A change of the year changes all the values of FAOSTAT on the page. The text below the slider gives the last year of FAOSTAT and the last year of the United States data. The text below the title gives the first year and the last year of each source.
 
 The unit control has 3 values: pound, kilogram and tonne. The page shows production in units of 1,000,000 pounds, 1,000,000 kilograms or tonnes. It shows prices in US dollars for each pound, kilogram or tonne. A price in tonnes has no decimal part.
 
@@ -38,9 +38,11 @@ For example, `#y=2023&u=lb&a=183&o=1` opens the page for the year 2023, in pound
 
 ## Top of the page
 
-The listed production is the sum of the production of the countries in the table. The page has 3 areas at the top for the selected year. The area "World production" shows the World total, the share of the listed production that is official, the range and the score. The area "World export price" shows the export value divided by the export quantity, the range and the score.
+The listed production is the sum of the production of the countries in the table. The page has 4 areas at the top. The first 3 areas show the selected year. The area "World production" shows the World total, the share of the listed production that is official, the range and the score. The area "World export price" shows the export value divided by the export quantity, the range and the score.
 
 The area "Producer price range" shows the lowest and the highest producer price of the countries, with the names of these countries. It also shows the number of countries that have a price.
+
+The area "United States" shows the last year of the United States data, which FAOSTAT does not have. It shows the production, the average price and the date of the report. When the year has one report only, it tells that the value is a first estimate. A button in the area moves the page to the section "United States".
 
 ## Panel about the data of the year
 
@@ -80,7 +82,7 @@ A country with an export quantity of less than 100 tonnes has no export price. T
 
 The section "United States" is below the table of the countries. It shows the data of NASS for the United States: the production, the price, the colonies, the yield, the stocks and the value. The file `DATA_SOURCES.md` gives the source. The text below the title tells that the data come from NASS and are newer than the FAOSTAT data. The section also shows the date on which the script last examined ESMIS.
 
-The page gets the file `data/us_supply.js` when the section comes into view. Before that, the section shows the text "Loading". When the file does not come, the section shows a message with the name of the file. The other parts of the page work.
+The page gets the file `data/us_supply.js` with the page. When the file does not come, the section and the area at the top show a message with the name of the file. The other parts of the page work.
 
 ### Year of the section
 
