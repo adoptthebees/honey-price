@@ -26,6 +26,9 @@ To examine the documents, use `python3 scripts/check_docs.py`. Add the option `-
 - `DOCS/SPECS/CONFIDENCE_METHOD.md` is the specification of the confidence score and the range.
 - `DOCS/SPECS/REVISION_TEST.md` is the specification of the test of the range against previous versions of the data.
 - `DOCS/SPECS/PAGE_BEHAVIOR.md` is the specification of the page.
+- `DOCS/SPECS/2026_10_11_MARKET_DATA_DESIGN.md` is the specification of the market data of Exchange Honey: the sources, the database and the pages.
+- `DOCS/PLANS/2026_10_11_MARKET_DATA_PLAN.md` is the plan for the FAOSTAT part of the market data.
+- `DOCS/PLANS/2026_10_12_MARKET_SOURCES_AND_API_PLAN.md` is the plan for the other sources and the API of the market data.
 
 ## License
 

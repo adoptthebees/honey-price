@@ -124,12 +124,15 @@ These words are technical nouns for the data:
 - non-official value
 - World total
 - World row
+- bee
 - year
 - month
 - week
 - day
 - Monday
 - two
+- minute
+- second
 
 These words are technical nouns for the statistics:
 
@@ -186,6 +189,7 @@ These words are technical nouns for the software:
 - repository
 - workflow
 - database
+- memory
 - page
 - browser
 - server
@@ -195,6 +199,20 @@ These words are technical nouns for the software:
 - option
 - request
 - endpoint
+- route
+- parameter
+- client
+- response
+- publication
+- package
+- framework
+- loader
+- adapter
+- program
+- router
+- frontend
+- separator
+- summary
 - permission
 - branch
 - commit
@@ -253,6 +271,7 @@ These words are technical nouns for the documents:
 - purpose
 - title
 - heading
+- section
 - text
 - letter
 - word
@@ -261,6 +280,7 @@ These words are technical nouns for the documents:
 - rule
 - dictionary
 - noun
+- defect
 - verb
 - topic
 - semicolon
@@ -269,6 +289,73 @@ These words are technical nouns for the documents:
 - note
 - license
 - issue
+
+These words are technical nouns for the market data system:
+
+- API
+- CDN
+- application
+- backend
+- build
+- deal
+- duplicate
+- attribute
+- filter
+- forecast
+- GB
+- hash
+- header
+- index
+- KB
+- line
+- manifest
+- market
+- marketplace
+- product owner
+- mirror
+- ms
+- parser
+- PDF
+- query
+- quote
+- response
+- role
+- schema
+- state
+- transaction
+- visitor
+- dataset
+- dependency
+- migration
+- partner
+- reader
+- reporter
+- region
+- rollback
+- SQL
+- statement
+- unique index
+
+These words are technical nouns for the trade data:
+
+- beeswax
+- case
+- colony
+- CIF
+- duty
+- exporter
+- freight
+- HTS
+- importer
+- insurance
+- municipality
+- notice
+- origin
+- port
+- remedy
+- tariff
+- stock
+- yield
 
 These words are names:
 
@@ -281,11 +368,22 @@ These words are names:
 - GitHub
 - Git
 - Internet Archive
+- PostgreSQL
+- SQLite
 - China
 - Romania
 - STE
 - Simplified Technical English
 - Food and Agriculture Organization of the United Nations
+- Exchange Honey
+- Federal Register
+- AMS
+- NASS
+- ERS
+- IBGE
+- USITC
+- Census
+- Brazil
 
 Add each new technical noun to this list.
 
@@ -299,6 +397,7 @@ STE lets you use a technical verb that is not in the dictionary (Rule 1.12). The
 - store
 - sort
 - update
+- filter
 
 Add each new technical verb to this list.
 
