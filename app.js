@@ -65,6 +65,14 @@
   const beyondFao = () => state.year > lastYear;
   // The year of a FAOSTAT panel, with its label when the page is in a later year.
   const faoLabel = () => (beyondFao() ? `${faoYear()}, the last FAOSTAT year` : String(faoYear()));
+  // The charts have the years of the page on their x axis, so they reach the last year of the
+  // page even when FAOSTAT stops before it. A FAOSTAT array has one slot for each FAOSTAT year:
+  // padToPage() puts it on the page axis, and faoIndexOf() maps a page index back, or gives -1.
+  const pageYears = Array.from({ length: lastPageYear - firstPageYear + 1 }, (_, k) => firstPageYear + k);
+  const pageIndex = new Map(pageYears.map((y, j) => [y, j]));
+  const faoOffset = pageIndex.get(years[0]);
+  const faoIndexOf = (j) => (j >= faoOffset && j - faoOffset < years.length ? j - faoOffset : -1);
+  const padToPage = (arr) => pageYears.map((_, j) => (faoIndexOf(j) < 0 ? null : arr[faoIndexOf(j)]));
 
   // ---- State -----------------------------------------------------------------
   const state = { year: lastPageYear, unit: 'lb', area: null, sort: 'production', dir: -1, query: '', official: false };
@@ -184,7 +192,10 @@
     if (extra) parts.push(extra);
     return [parts.join(' \u00b7 '), ...scoreSteps(p, isWorld)].join('\n');
   }
-  function chartTip(kind, src, i) {
+  // j is an index on the page axis.
+  function chartTip(kind, src, j) {
+    const i = faoIndexOf(j);
+    if (i < 0) return `${pageYears[j]}: FAOSTAT has no value yet`;
     const p = pointOf(src, kind, i);
     if (!p) return `${years[i]}: ${kind === 'export' ? 'no export price' : 'no value'}`;
     return describe(kind, p, i, kind === 'export' ? `${massText(src.exportQty[i], state.unit)} exported` : null, src === D.world);
@@ -279,11 +290,12 @@
     return h('div', { class: 'legend' }, keys);
   }
 
-  // cfg: { pts, conv, color, label, marker, prefix, empty, tip(i), onPick(i) }
-  // pts has one point (or null) for each year.
+  // cfg: { pts, conv, color, label, marker, prefix, empty, tip(j), onPick(j) }
+  // pts has one point (or null) for each FAOSTAT year. The chart puts them on the page axis;
+  // marker, tip and onPick use indexes on the page axis.
   function lineChart(host, cfg) {
     host.textContent = '';
-    const { pts, conv } = cfg;
+    const pts = padToPage(cfg.pts), conv = cfg.conv;
     const have = pts.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
     if (!have.length) {
       host.append(h('p', { class: 'note', text: cfg.empty || 'No data.' }));
@@ -293,7 +305,7 @@
     // A very wide range must not crush the rest of the chart. The scale follows the values;
     // a range that goes above it is cut off at the top.
     const top = Math.min(Math.max(...have.map(hi)), Math.max(...have.map(val)) * 1.5);
-    const f = frame({ years, provisionalFrom, host, top, prefix: cfg.prefix, label: cfg.label, height: cfg.height, bottom: 40 });
+    const f = frame({ years: pageYears, provisionalFrom: provisionalFrom + faoOffset, host, top, prefix: cfg.prefix, label: cfg.label, height: cfg.height, bottom: 40 });
     const { svg, layer, W, m, iw, ih, n, X, Y } = f;
     const radius = W < 420 ? 2.8 : 3.6;
 
@@ -356,6 +368,9 @@
       svg.append(s('line', { class: 'marker', x1: X(cfg.marker), x2: X(cfg.marker), y1: m.t, y2: m.t + ih }));
       if (pts[cfg.marker]) {
         svg.append(s('circle', { cx: X(cfg.marker), cy: Y(val(cfg.marker)), r: radius + 3.5, fill: 'none', stroke: INK, 'stroke-width': 1.75 }));
+      } else if (faoIndexOf(cfg.marker) < 0) {
+        svg.append(s('text', { class: 'tick', x: X(cfg.marker) - 6, y: m.t + ih - 6, 'text-anchor': 'end',
+          stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, `${pageYears[cfg.marker]}: no FAOSTAT value yet`));
       }
     }
 
@@ -386,15 +401,16 @@
   }
 
   // One bar for each year: the share of the listed production that each kind of source makes.
-  // cfg: { rows (see COMPOSITION), label, marker, tip(i), onPick(i) }
+  // cfg: { rows (see COMPOSITION, one for each FAOSTAT year), label, marker, tip(j), onPick(j) }
   function stackChart(host, cfg) {
     host.textContent = '';
-    const f = frame({ years, provisionalFrom, host, top: 100, step: 25, suffix: '%', label: cfg.label, height: 230, bottom: 28 });
+    const rows = padToPage(cfg.rows);
+    const f = frame({ years: pageYears, provisionalFrom: provisionalFrom + faoOffset, host, top: 100, step: 25, suffix: '%', label: cfg.label, height: 230, bottom: 28 });
     const { svg, m, iw, ih, n, X, Y } = f;
     const hatchId = `hatch${uid()}`;
     f.defs.append(hatchPattern(hatchId));
     const bar = Math.max(2, (iw / (n - 1)) * 0.78);
-    cfg.rows.forEach((c, i) => {
+    rows.forEach((c, i) => {
       if (!c) return;
       let base = 0;
       for (const flag of FLAG_ORDER) {
@@ -406,12 +422,15 @@
     });
     svg.append(s('line', { class: 'marker', x1: X(cfg.marker), x2: X(cfg.marker), y1: m.t, y2: m.t + ih }));
     const tip = hover(f, { tip: cfg.tip, at: () => m.t + ih * 0.15, onPick: cfg.onPick });
-    host.append(svg, tip, stackLegend(cfg.rows, hatchId));
+    host.append(svg, tip, stackLegend(rows, hatchId));
   }
 
-  const pickYear = (i) => { state.year = years[i]; render(); };
+  // A click on a chart selects the year of that index on the page axis.
+  const pickYear = (j) => { state.year = pageYears[j]; render(); };
 
-  function compositionTip(i) {
+  function compositionTip(j) {
+    const i = faoIndexOf(j);
+    if (i < 0) return `${pageYears[j]}: FAOSTAT has no values yet`;
     const c = COMPOSITION[i];
     if (!c) return `${years[i]}: no production values`;
     return `${years[i]}: ${breakdown(c.parts, c.total)} of ${fmtMass(c.total, state.unit)} ${UNITS[state.unit].big} listed`
@@ -422,14 +441,14 @@
     stackChart($('quality-chart'), {
       rows: COMPOSITION,
       label: `Production by source, ${years[0]} to ${lastYear}`,
-      marker: yearIndex.get(faoYear()),
+      marker: pageIndex.get(state.year),
       tip: compositionTip,
       onPick: pickYear,
     });
   }
 
   function drawWorldCharts() {
-    const unit = state.unit, u = UNITS[unit], marker = yearIndex.get(faoYear());
+    const unit = state.unit, u = UNITS[unit], marker = pageIndex.get(state.year);
     lineChart($('world-chart'), {
       pts: pointSeries(D.world, 'production'),
       conv: (t) => massBig(t, unit),
@@ -458,7 +477,7 @@
   function drawDetailCharts() {
     const a = byCode.get(state.area);
     if (!a || !$('detail-production')) return;
-    const unit = state.unit, u = UNITS[unit], marker = yearIndex.get(state.year);
+    const unit = state.unit, u = UNITS[unit], marker = pageIndex.get(state.year);
     lineChart($('detail-production'), {
       pts: pointSeries(a, 'production'),
       conv: (t) => massBig(t, unit),

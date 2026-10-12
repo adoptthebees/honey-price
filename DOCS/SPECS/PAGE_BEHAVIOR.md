@@ -59,9 +59,13 @@ The list also gives the number of countries that have a producer price or an exp
 
 The panel also has a chart. Each bar of the chart is one year. The bar shows the share of the listed production that has each flag. The switch does not change this chart. A click on a bar selects the year.
 
+The x axis of the chart goes to the last year of the page. A year without FAOSTAT values has no bar.
+
 ## Charts
 
-The page has 2 charts for the World: production and export price. The country panel has 3 charts for one country: production, producer price and export price. Each chart has a point for each year with a value. The x axis has all the years, with a label each 10 years and a mark each 5 years. The y axis starts at zero.
+The page has 2 charts for the World: production and export price. The country panel has 3 charts for one country: production, producer price and export price. Each chart has a point for each year with a value. The x axis has all the years of the page, to the last year of all the data. It has a label each 10 years and a mark each 5 years. The y axis starts at zero.
+
+A year after the last FAOSTAT year has no point. When the selected year is such a year, the chart shows the text "no FAOSTAT value yet" with the year. The text is next to the mark of the selected year.
 
 The shape of a point shows the flag. An official value has a solid circle. An estimated value has an open circle. An imputed value has a diamond. An external value has a solid square, and a series break has an open square. A point is lighter when its score is lower.
 
