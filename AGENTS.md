@@ -253,6 +253,7 @@ These words are technical nouns for the software:
 - axis
 - circle
 - diamond
+- triangle
 - band
 - bar
 - chart

@@ -89,6 +89,8 @@ The country panel shows one country. It gives the production, the share of the W
 
 A country with an export quantity of less than 100 tonnes has no export price. The panel shows the export quantity and gives the cause. The switch "Official values only" can remove the export values of the year. Then the panel shows no export quantity and gives this cause.
 
+The panel of the United States also uses the USDA data, for the years that FAOSTAT does not have. In such a year, the production and the producer price come from the USDA. A note gives the report and tells that FAOSTAT has no value at this time. The charts of the production and of the producer price show these years with a solid triangle. A USDA value has no score and no range. The key "USDA NASS" is below the chart.
+
 ## Section "United States"
 
 The section "United States" is below the table of the countries. It shows the data of NASS for the United States in the selected year. These are the production, the price, the colonies, the yield, the stocks and the value. The heading gives the year. The file `DATA_SOURCES.md` gives the source. The text below the title tells that the data come from NASS and are newer than the FAOSTAT data.

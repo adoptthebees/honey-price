@@ -74,6 +74,46 @@
   const faoIndexOf = (j) => (j >= faoOffset && j - faoOffset < years.length ? j - faoOffset : -1);
   const padToPage = (arr) => pageYears.map((_, j) => (faoIndexOf(j) < 0 ? null : arr[faoIndexOf(j)]));
 
+  // ---- USDA values of the United States ---------------------------------------
+  // data/us_supply.js has the United States for years that FAOSTAT does not have yet. The country
+  // panel of the United States takes those values for such years, marked as USDA values.
+  const USDA_FLAG = 'U';
+  const US_AREA = (D.areas.find((a) => a.name === 'United States of America') || {}).code;
+  const usdaByYear = new Map();   // year -> { production in tonnes, price in USD per tonne, report, firstEstimate }
+  {
+    const S = window.HONEY_US_SUPPLY;
+    if (S && S.geos[0] && S.geos[0].code === 'US') {
+      const estimates = new Map(S.us.map((row) => [row[0], row]));
+      for (const r of S.rows) {
+        if (r[0] !== 0) continue;
+        const year = S.years[r[1]], e = estimates.get(year);
+        usdaByYear.set(year, {
+          production: r[5] == null ? null : r[5] / UNITS.lb.perTonne,
+          price: r[7] == null ? null : r[7] * UNITS.lb.perTonne,
+          report: S.reports[r[2]].date,
+          firstEstimate: !e || e[4] == null,
+        });
+      }
+    }
+  }
+  // The USDA points of one series of the United States, on the page axis, for the years that
+  // FAOSTAT does not have. Empty for every other country and for the export price.
+  function usdaPoints(code, kind) {
+    const out = new Map();
+    if (code !== US_AREA || !(kind in { production: 1, price: 1 })) return out;
+    for (const [year, u] of usdaByYear) {
+      const j = pageIndex.get(year);
+      if (j == null || faoIndexOf(j) >= 0 || u[kind] == null) continue;
+      out.set(j, { value: u[kind], flag: USDA_FLAG, conf: null, band: 0, why: null, lo: u[kind], hi: u[kind], usda: u });
+    }
+    return out;
+  }
+  const usdaNote = (u) => `USDA NASS, report of ${u.report}${u.firstEstimate ? ', first estimate' : ''}. FAOSTAT has no value for this year yet.`;
+  function usdaTip(kind, p, j) {
+    const fmt = fmtFor(kind);
+    return `${pageYears[j]}: ${fmt.num(p.value)}${fmt.unit}\n${usdaNote(p.usda)}`;
+  }
+
   // ---- State -----------------------------------------------------------------
   const state = { year: lastPageYear, unit: 'lb', area: null, sort: 'production', dir: -1, query: '', official: false };
 
@@ -275,6 +315,7 @@
     else if (flag === 'E') svg.append(s('circle', { cx: 7, cy: 7, r: 3.6, ...ring }));
     else if (flag === 'I') svg.append(s('path', { d: 'M7 2.5L11.5 7L7 11.5L2.5 7Z', ...ring }));
     else if (flag === 'X') svg.append(s('rect', { x: 3.8, y: 3.8, width: 6.4, height: 6.4, fill: color }));
+    else if (flag === USDA_FLAG) svg.append(s('path', { d: 'M7 2.4L11.6 10.4L2.4 10.4Z', fill: color }));
     else svg.append(s('rect', { x: 3.8, y: 3.8, width: 6.4, height: 6.4, ...ring }));
     return svg;
   }
@@ -283,6 +324,7 @@
   function legend(pts, color) {
     const flags = FLAG_ORDER.filter((f) => pts.some((p) => p && p.flag === f));
     const keys = flags.map((f) => h('span', { class: 'key' }, glyph(f, color), flagWord(f)));
+    if (pts.some((p) => p && p.flag === USDA_FLAG)) keys.push(h('span', { class: 'key' }, glyph(USDA_FLAG, color), 'USDA NASS'));
     if (pts.some((p) => p && p.band)) keys.push(h('span', { class: 'key' }, h('span', { class: 'swatch band' }), 'range'));
     keys.push(h('span', { class: 'key' }, h('span', { class: 'swatch prov' }), 'provisional'));
     keys.push(h('span', { class: 'key' }, h('span', { class: 'swatch strip' }), 'confidence: high to very low'));
@@ -296,6 +338,8 @@
   function lineChart(host, cfg) {
     host.textContent = '';
     const pts = padToPage(cfg.pts), conv = cfg.conv;
+    // Points of another source for the years that FAOSTAT does not have (see usdaPoints).
+    if (cfg.extra) for (const [j, p] of cfg.extra) if (!pts[j]) pts[j] = p;
     const have = pts.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
     if (!have.length) {
       host.append(h('p', { class: 'note', text: cfg.empty || 'No data.' }));
@@ -343,7 +387,7 @@
     //    has a low confidence score.
     for (const i of have) {
       const p = pts[i], x = X(i), y = Y(val(i));
-      const opacity = (0.5 + 0.5 * (p.conf / RUBRIC.max)).toFixed(2);
+      const opacity = p.conf == null ? '1' : (0.5 + 0.5 * (p.conf / RUBRIC.max)).toFixed(2);
       const ring = { fill: '#fff', stroke: cfg.color, 'stroke-width': 1.5, opacity };
       let mark;
       if (p.flag === 'A') mark = s('circle', { cx: x, cy: y, r: radius, fill: cfg.color, opacity, ...HALO });
@@ -352,7 +396,10 @@
         const k = radius + 1.2;
         mark = s('path', { d: `M${x} ${y - k}L${x + k} ${y}L${x} ${y + k}L${x - k} ${y}Z`, ...ring });
       } else if (p.flag === 'X') mark = s('rect', { x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius, fill: cfg.color, opacity, ...HALO });
-      else mark = s('rect', { x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius, ...ring });
+      else if (p.flag === USDA_FLAG) {
+        const k = radius + 1.4;
+        mark = s('path', { d: `M${x} ${y - k}L${x + k} ${y + k * 0.8}L${x - k} ${y + k * 0.8}Z`, fill: cfg.color, ...HALO });
+      } else mark = s('rect', { x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius, ...ring });
       svg.append(mark);
     }
 
@@ -361,6 +408,7 @@
     const cell = iw / (n - 1);
     svg.append(s('text', { class: 'tick', x: m.l - 8, y: stripY + 7, 'text-anchor': 'end' }, 'confidence'));
     for (const i of have) {
+      if (pts[i].conf == null) continue;   // a point of another source has no score
       svg.append(s('rect', { x: Math.max(m.l, X(i) - cell / 2), y: stripY, width: cell - 1, height: 8, fill: tierOf(pts[i].conf).color }));
     }
 
@@ -478,19 +526,22 @@
     const a = byCode.get(state.area);
     if (!a || !$('detail-production')) return;
     const unit = state.unit, u = UNITS[unit], marker = pageIndex.get(state.year);
+    const usdaProduction = usdaPoints(a.code, 'production'), usdaPrice = usdaPoints(a.code, 'price');
     lineChart($('detail-production'), {
       pts: pointSeries(a, 'production'),
+      extra: usdaProduction,
       conv: (t) => massBig(t, unit),
       color: '#c77d00',
       height: 210,
       label: `${a.name}: honey production in ${u.big}, with confidence`,
       marker,
       empty: state.official ? 'No official production values.' : 'FAOSTAT has no production values for this country.',
-      tip: (i) => chartTip('production', a, i),
+      tip: (j) => (usdaProduction.has(j) ? usdaTip('production', usdaProduction.get(j), j) : chartTip('production', a, j)),
       onPick: pickYear,
     });
     lineChart($('detail-price'), {
       pts: pointSeries(a, 'price'),
+      extra: usdaPrice,
       conv: (p) => priceIn(p, unit),
       color: '#6b4a1f',
       height: 210,
@@ -498,7 +549,7 @@
       label: `${a.name}: producer price in USD per ${u.short}, with confidence`,
       marker,
       empty: state.official ? 'No official producer price.' : 'FAOSTAT has no producer price for this country.',
-      tip: (i) => chartTip('price', a, i),
+      tip: (j) => (usdaPrice.has(j) ? usdaTip('price', usdaPrice.get(j), j) : chartTip('price', a, j)),
       onPick: pickYear,
     });
     lineChart($('detail-export'), {
@@ -718,15 +769,27 @@
       h('dd', {}, text, p ? confPill(p, describe(kind, p, i)) : null,
         p && p.band ? h('small', { text: `range ${fmtFor(kind).range(p.lo, p.hi)}` }) : null),
     ];
+    // In a year that FAOSTAT does not have, the United States takes the USDA value and says so.
+    const usda = beyondFao() && a.code === US_AREA ? usdaByYear.get(state.year) : null;
+    const usdaFact = (label, text) => [
+      h('dt', { text: label }),
+      h('dd', {}, text, h('small', { text: usdaNote(usda) })),
+    ];
+    const productionFact = usda && usda.production != null
+      ? usdaFact(`Production ${state.year}`, `${fmtMass(usda.production, unit)} ${u.big}`)
+      : fact(`Production ${faoYear()}`, 'production', pp, pp ? `${fmtMass(pp.value, unit)} ${u.big}` : DASH);
+    const priceFact = usda && usda.price != null
+      ? usdaFact(`Producer price ${state.year}`, `${fmtPrice(usda.price, unit)} per ${u.short}`)
+      : fact(`Producer price ${faoYear()}`, 'price', pc, pc ? `${fmtPrice(pc.value, unit)} per ${u.short}` : DASH);
     box.replaceChildren(
       h('div', { class: 'panel-head' },
         h('h2', { text: a.name }),
         h('button', { type: 'button', class: 'ghost', id: 'clear', text: 'Clear' })),
       h('dl', { class: 'facts' },
-        fact(`Production ${faoYear()}`, 'production', pp, pp ? `${fmtMass(pp.value, unit)} ${u.big}` : DASH),
-        h('dt', { text: 'Share of world' }),
+        productionFact,
+        h('dt', { text: `Share of world ${faoYear()}` }),
         h('dd', { text: fmtShare(share) }),
-        fact(`Producer price ${faoYear()}`, 'price', pc, pc ? `${fmtPrice(pc.value, unit)} per ${u.short}` : DASH),
+        priceFact,
         fact(`Export price ${faoYear()}`, 'export', pe,
           pe ? `${fmtPrice(pe.value, unit)} per ${u.short}` : exportCause(a, i)),
         h('dt', { text: `Exported ${faoYear()}` }),
