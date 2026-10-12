@@ -32,34 +32,42 @@
   const nf = (digits) => new Intl.NumberFormat('en-US', {
     minimumFractionDigits: digits, maximumFractionDigits: digits,
   });
-  const f0 = nf(0), f1 = nf(1), f2 = nf(2), f3 = nf(3), f4 = nf(4);
-  const fSmallTonnes = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const f0 = nf(0), f2 = nf(2);
 
   const massBig = (tonnes, unit) => (tonnes * UNITS[unit].perTonne) / UNITS[unit].bigDiv;
+  // Digits for a number of size r. A whole-number unit (tonnes, or lb and kg below a million) uses no digits from 10 up.
+  function digitsFor(r, whole) {
+    if (whole && r >= 10) return 0;
+    if (r >= 100) return 1;
+    if (r >= 1) return 2;
+    return Math.min(12, 1 - Math.floor(Math.log10(r)));
+  }
   // The digits follow ref, so that the two ends of a range get the same number of digits.
-  // A zero shows as 0. A small value gets more digits, so it never reads as 0.
+  // If that would round a non-zero value to 0, the value gets its own digits instead.
+  function fmtNum(v, ref, whole) {
+    if (v === 0) return '0';
+    let d = digitsFor(ref, whole);
+    if (Number(v.toFixed(d)) === 0) d = digitsFor(v, whole);
+    return nf(d).format(v);
+  }
   function fmtMass(tonnes, unit, ref = tonnes) {
     if (tonnes == null) return DASH;
-    const v = massBig(tonnes, unit);
-    if (v === 0) return '0';
-    const r = massBig(ref, unit);
-    if (unit === 'tonne') return (r >= 10 ? f0 : fSmallTonnes).format(v);
-    return (r >= 100 ? f1 : r >= 1 ? f2 : r >= 0.01 ? f3 : f4).format(v);
+    return fmtNum(massBig(tonnes, unit), massBig(ref, unit), unit === 'tonne');
   }
   // A mass with its unit. A mass below one big unit shows in the small unit (lb or kg).
   function massText(tonnes, unit) {
     if (tonnes == null) return DASH;
     const u = UNITS[unit];
-    return unit === 'tonne' || massBig(tonnes, unit) >= 1
-      ? `${fmtMass(tonnes, unit)} ${u.big}`
-      : `${f0.format(tonnes * u.perTonne)} ${u.short}`;
+    if (unit === 'tonne' || massBig(tonnes, unit) >= 1) return `${fmtMass(tonnes, unit)} ${u.big}`;
+    const small = tonnes * u.perTonne;
+    return `${fmtNum(small, small, true)} ${u.short}`;
   }
   const priceIn = (usdPerTonne, unit) => usdPerTonne / UNITS[unit].perTonne;
   function fmtPrice(usdPerTonne, unit) {
     if (usdPerTonne == null) return DASH;
     return '$' + (unit === 'tonne' ? f0 : f2).format(priceIn(usdPerTonne, unit));
   }
-  const fmtShare = (x) => (x == null ? DASH : x < 0.0005 ? '<0.1%' : (x * 100).toFixed(1) + '%');
+  const fmtShare = (x) => (x == null ? DASH : x === 0 ? '0%' : x < 0.0005 ? '<0.1%' : (x * 100).toFixed(1) + '%');
   const pct = (x) => (x > 0 && x < 0.005 ? '<1%' : Math.round(x * 100) + '%');
   const norm = (text) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -176,6 +184,15 @@
     return a.exportFlags.trim() !== ''
       ? `Exports never reached ${MIN_EXPORT_TONNES} tonnes in a year, so there is no export price.`
       : 'FAOSTAT has no export data for this country.';
+  }
+  // Why a country has no export price for a year: a quantity under the limit, a value that the switch hides, or both.
+  function exportCause(a, i) {
+    const flag = a.exportFlags[i].trim();
+    if (!flag) return DASH;
+    const causes = [];
+    if (a.exportQty[i] < MIN_EXPORT_TONNES) causes.push(`under ${MIN_EXPORT_TONNES} tonnes`);
+    if (state.official && flag !== 'A') causes.push('not official');
+    return causes.length ? `${DASH} (${causes.join('; ')})` : DASH;
   }
 
   // How to show a value of each kind in the selected unit.
@@ -325,6 +342,9 @@
   }
 
   let chartCount = 0;
+  // Ink for lines, whiskers and the selected year. A white halo keeps a point readable over a line.
+  const INK = '#2a2118';
+  const HALO = { stroke: '#fff', 'stroke-width': 1.2, 'paint-order': 'stroke' };
 
   // The frame of a chart: the shading of the provisional years, the grid and the labels.
   // The x axis is always the full list of years, and the y axis starts at 0.
@@ -332,7 +352,7 @@
   function frame(cfg) {
     const W = Math.max(280, Math.round(cfg.host.clientWidth || 640));
     const H = cfg.height;
-    const m = { t: 12, r: 14, b: cfg.bottom, l: 62 };
+    const m = { t: 18, r: 14, b: cfg.bottom, l: 74 };
     const iw = W - m.l - m.r, ih = H - m.t - m.b;
     const step = cfg.step || niceStep((cfg.top || 1) / 4);
     const yMax = Math.ceil(cfg.top / step - 1e-9) * step || step;
@@ -348,15 +368,20 @@
     const defs = s('defs');
     defs.append(clip);
     svg.append(defs, s('rect', { class: 'prov', x: X(provisionalFrom), y: m.t, width: W - m.r - X(provisionalFrom), height: ih }));
+    svg.append(
+      s('line', { class: 'prov-edge', x1: X(provisionalFrom), x2: X(provisionalFrom), y1: m.t, y2: m.t + ih }),
+      s('text', { class: 'prov-label', x: X(provisionalFrom) - 5, y: m.t - 6, 'text-anchor': 'end' }, 'provisional'),
+    );
     for (let k = 0; k * step <= yMax + step / 1e6; k++) {
       const v = k * step;
       svg.append(
-        s('line', { class: 'grid', x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) }),
+        s('line', { class: v === 0 ? 'grid zero' : 'grid', x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) }),
         s('text', { class: 'tick', x: m.l - 8, y: Y(v) + 4, 'text-anchor': 'end' }, (cfg.prefix || '') + axis.format(v) + (cfg.suffix || '')),
       );
     }
     years.forEach((y, i) => {
       if (y % 10 === 0) svg.append(s('text', { class: 'tick', x: X(i), y: H - 6, 'text-anchor': 'middle' }, String(y)));
+      else if (y % 5 === 0) svg.append(s('line', { class: 'axis-tick', x1: X(i), x2: X(i), y1: m.t + ih, y2: m.t + ih + 4 }));
     });
     // What a chart puts in this group is cut off at the frame.
     const layer = s('g', { 'clip-path': `url(#${clipId})` });
@@ -412,9 +437,9 @@
     // A very wide range must not crush the rest of the chart. The scale follows the values;
     // a range that goes above it is cut off at the top.
     const top = Math.min(Math.max(...have.map(hi)), Math.max(...have.map(val)) * 1.5);
-    const f = frame({ host, top, prefix: cfg.prefix, label: cfg.label, height: 250, bottom: 40 });
+    const f = frame({ host, top, prefix: cfg.prefix, label: cfg.label, height: cfg.height, bottom: 40 });
     const { svg, layer, W, m, iw, ih, n, X, Y } = f;
-    const radius = W < 420 ? 2.4 : 3.2;
+    const radius = W < 420 ? 2.8 : 3.6;
 
     // Runs of years that have a point. A gap in the data stays a gap.
     const runs = [];
@@ -429,23 +454,20 @@
       if (!r.some((i) => pts[i].band)) continue;
       const up = r.map((i, k) => `${k ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(hi(i)).toFixed(1)}`).join('');
       const down = r.slice().reverse().map((i) => `L${X(i).toFixed(1)} ${Y(lo(i)).toFixed(1)}`).join('');
-      layer.append(s('path', { d: `${up}${down}Z`, fill: cfg.color, 'fill-opacity': 0.15 }));
+      layer.append(s('path', { d: `${up}${down}Z`, fill: cfg.color, 'fill-opacity': 0.25, stroke: cfg.color, 'stroke-opacity': 0.4, 'stroke-width': 0.5 }));
     }
     // 2. The line, thin: the points are what counts.
     for (const r of runs) {
       if (r.length < 2) continue;
       const d = r.map((i, k) => `${k ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(val(i)).toFixed(1)}`).join('');
-      layer.append(s('path', { d, fill: 'none', stroke: cfg.color, 'stroke-width': 1.25, 'stroke-linejoin': 'round', opacity: 0.7 }));
+      layer.append(s('path', { d, fill: 'none', stroke: INK, 'stroke-width': 1.5, 'stroke-linejoin': 'round', opacity: 0.85 }));
     }
-    // 3. A bar for the range of each point that has one.
+    // 3. A bar for the range of each point that has one. It is faint: the band carries the range,
+    //    the bar only marks the year.
     for (const i of have) {
       if (!pts[i].band) continue;
-      const x = X(i), opacity = (0.35 + 0.65 * (pts[i].conf / RUBRIC.max)).toFixed(2);
-      layer.append(
-        s('line', { x1: x, x2: x, y1: Y(hi(i)), y2: Y(lo(i)), stroke: cfg.color, 'stroke-width': 1, opacity }),
-        s('line', { x1: x - 2.5, x2: x + 2.5, y1: Y(hi(i)), y2: Y(hi(i)), stroke: cfg.color, 'stroke-width': 1, opacity }),
-        s('line', { x1: x - 2.5, x2: x + 2.5, y1: Y(lo(i)), y2: Y(lo(i)), stroke: cfg.color, 'stroke-width': 1, opacity }),
-      );
+      const x = X(i);
+      layer.append(s('line', { x1: x, x2: x, y1: Y(hi(i)), y2: Y(lo(i)), stroke: INK, 'stroke-width': 1, opacity: 0.2 }));
     }
     svg.append(layer);
 
@@ -453,15 +475,15 @@
     //    has a low confidence score.
     for (const i of have) {
       const p = pts[i], x = X(i), y = Y(val(i));
-      const opacity = (0.45 + 0.55 * (p.conf / RUBRIC.max)).toFixed(2);
+      const opacity = (0.5 + 0.5 * (p.conf / RUBRIC.max)).toFixed(2);
       const ring = { fill: '#fff', stroke: cfg.color, 'stroke-width': 1.5, opacity };
       let mark;
-      if (p.flag === 'A') mark = s('circle', { cx: x, cy: y, r: radius, fill: cfg.color, opacity });
+      if (p.flag === 'A') mark = s('circle', { cx: x, cy: y, r: radius, fill: cfg.color, opacity, ...HALO });
       else if (p.flag === 'E') mark = s('circle', { cx: x, cy: y, r: radius + 0.5, ...ring });
       else if (p.flag === 'I') {
         const k = radius + 1.2;
         mark = s('path', { d: `M${x} ${y - k}L${x + k} ${y}L${x} ${y + k}L${x - k} ${y}Z`, ...ring });
-      } else if (p.flag === 'X') mark = s('rect', { x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius, fill: cfg.color, opacity });
+      } else if (p.flag === 'X') mark = s('rect', { x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius, fill: cfg.color, opacity, ...HALO });
       else mark = s('rect', { x: x - radius, y: y - radius, width: 2 * radius, height: 2 * radius, ...ring });
       svg.append(mark);
     }
@@ -469,15 +491,15 @@
     // 5. A strip under the chart: one cell for each year, colored by the confidence score.
     const stripY = m.t + ih + 8;
     const cell = iw / (n - 1);
-    svg.append(s('text', { class: 'tick', x: m.l - 8, y: stripY + 6, 'text-anchor': 'end' }, 'confidence'));
+    svg.append(s('text', { class: 'tick', x: m.l - 8, y: stripY + 7, 'text-anchor': 'end' }, 'confidence'));
     for (const i of have) {
-      svg.append(s('rect', { x: Math.max(m.l, X(i) - cell / 2), y: stripY, width: cell, height: 6, fill: tierOf(pts[i].conf).color }));
+      svg.append(s('rect', { x: Math.max(m.l, X(i) - cell / 2), y: stripY, width: cell - 1, height: 8, fill: tierOf(pts[i].conf).color }));
     }
 
     if (cfg.marker >= 0) {
       svg.append(s('line', { class: 'marker', x1: X(cfg.marker), x2: X(cfg.marker), y1: m.t, y2: m.t + ih }));
       if (pts[cfg.marker]) {
-        svg.append(s('circle', { cx: X(cfg.marker), cy: Y(val(cfg.marker)), r: radius + 3, fill: 'none', stroke: cfg.color, 'stroke-width': 1.5 }));
+        svg.append(s('circle', { cx: X(cfg.marker), cy: Y(val(cfg.marker)), r: radius + 3.5, fill: 'none', stroke: INK, 'stroke-width': 1.75 }));
       }
     }
 
@@ -511,7 +533,7 @@
   // cfg: { rows (see COMPOSITION), label, marker, tip(i), onPick(i) }
   function stackChart(host, cfg) {
     host.textContent = '';
-    const f = frame({ host, top: 100, step: 25, suffix: '%', label: cfg.label, height: 200, bottom: 28 });
+    const f = frame({ host, top: 100, step: 25, suffix: '%', label: cfg.label, height: 230, bottom: 28 });
     const { svg, m, iw, ih, n, X, Y } = f;
     const hatchId = `hatch${chartCount}`;
     f.defs.append(hatchPattern(hatchId));
@@ -556,6 +578,7 @@
       pts: pointSeries(D.world, 'production'),
       conv: (t) => massBig(t, unit),
       color: '#c77d00',
+      height: 290,
       label: `World honey production in ${u.big}, ${years[0]} to ${lastYear}, with confidence`,
       marker,
       empty: 'No values.',
@@ -565,7 +588,8 @@
     lineChart($('world-price-chart'), {
       pts: pointSeries(D.world, 'export'),
       conv: (p) => priceIn(p, unit),
-      color: '#6b4a1f',
+      color: '#2f6f7e',
+      height: 290,
       prefix: '$',
       label: `World honey export price in USD per ${u.short}, ${firstExportYear} to ${lastYear}, with confidence`,
       marker,
@@ -583,6 +607,7 @@
       pts: pointSeries(a, 'production'),
       conv: (t) => massBig(t, unit),
       color: '#c77d00',
+      height: 210,
       label: `${a.name}: honey production in ${u.big}, with confidence`,
       marker,
       empty: state.official ? 'No official production values.' : 'FAOSTAT has no production values for this country.',
@@ -593,6 +618,7 @@
       pts: pointSeries(a, 'price'),
       conv: (p) => priceIn(p, unit),
       color: '#6b4a1f',
+      height: 210,
       prefix: '$',
       label: `${a.name}: producer price in USD per ${u.short}, with confidence`,
       marker,
@@ -603,7 +629,8 @@
     lineChart($('detail-export'), {
       pts: pointSeries(a, 'export'),
       conv: (p) => priceIn(p, unit),
-      color: '#8a3b12',
+      color: '#2f6f7e',
+      height: 210,
       prefix: '$',
       label: `${a.name}: export price in USD per ${u.short}, with confidence`,
       marker,
@@ -731,6 +758,17 @@
     return td;
   }
 
+  // The letters that a table value can show, each with its meaning, such as "E = Estimated value".
+  function letterNotes() {
+    const seen = new Map();
+    for (const kind of ['production', 'price', 'trade']) {
+      for (const [flag, text] of Object.entries(FLAGS[kind])) {
+        if (flag !== 'A' && flag !== 'M' && !seen.has(flag)) seen.set(flag, text);
+      }
+    }
+    return FLAG_ORDER.filter((flag) => seen.has(flag)).map((flag) => `${flag} = ${seen.get(flag)}`).join('; ');
+  }
+
   function renderTable(model) {
     const unit = state.unit, u = UNITS[unit], i = model.i;
     for (const th of headRow.cells) {
@@ -771,7 +809,7 @@
       + `${count('price')} have a producer price and ${count('exportPrice')} an export price (${MIN_EXPORT_TONNES} tonnes or more exported). `
       + `Shares use the FAOSTAT world total.${gap} `
       + 'FAOSTAT "China" is the sum of China, mainland and Taiwan Province of China, so the table lists those two. '
-      + 'The small number after a value is its confidence score (5 to 90). A letter after a value (E, I, X or B) means the value is not official.'
+      + `The small number after a value is its confidence score (5 to 90). A letter after a value means the value is not official: ${letterNotes()}.`
       + (state.official ? ' "Official values only" is on: the table hides non-official values. Shares still use the full world total.' : '');
   }
 
@@ -807,7 +845,7 @@
         h('dd', { text: fmtShare(share) }),
         fact(`Producer price ${state.year}`, 'price', pc, pc ? `${fmtPrice(pc.value, unit)} per ${u.short}` : DASH),
         fact(`Export price ${state.year}`, 'export', pe,
-          pe ? `${fmtPrice(pe.value, unit)} per ${u.short}` : (exportedQty != null ? `${DASH} (under ${MIN_EXPORT_TONNES} tonnes)` : DASH)),
+          pe ? `${fmtPrice(pe.value, unit)} per ${u.short}` : exportCause(a, i)),
         h('dt', { text: `Exported ${state.year}` }),
         h('dd', { text: exportedQty == null ? DASH : massText(exportedQty, unit) })),
       h('h3', { text: `Production (${u.big})` }),
@@ -834,7 +872,6 @@
         link(f.lineage, 'FAO description of this data set'), '.');
     }
     const marks = (kind) => Object.entries(meta.flags[kind])
-      .filter(([flag]) => flag !== 'M')
       .map(([flag, text]) => `${flag} = ${text}`).join('; ');
     $('flags-list').replaceChildren(...[['Production', 'production'], ['Producer price', 'price'], ['Export price', 'trade']]
       .map(([label, kind]) => h('li', { text: `${label}: ${marks(kind)}.` })));
