@@ -45,6 +45,8 @@ CHINA_GROUP = '351'
 GROUP_WORD = 'excluding'
 KG_PER_LB = 0.45359237  # exact: the international pound
 STATUS_NAME = 'honey_status.js'  # next to the data file; holds the date of the latest check
+# FAO marks a year in which the value cannot exist with this flag. The row has no value.
+MISSING_FLAG = 'M'
 # The page quotes how far to trust the unit value of a small export. This is the test behind it.
 CHECK_FROM_YEAR = 2010
 PRICE_BOUNDS_PER_LB = (0.40, 6.00)  # USD per lb: a honey export price outside this range is not plausible
@@ -103,6 +105,9 @@ def download(name, cache_dir, refresh):
             part = path + '.part'
             with open(part, 'wb') as out:
                 shutil.copyfileobj(response, out)
+            # A connection that drops early ends the body without an error. The stamp is written
+            # only for a complete file, so a later run does not trust a cut-off one.
+            complete(part, response.headers.get('Content-Length'))
             os.replace(part, path)
             with open(stamp, 'w', encoding='utf-8') as f:
                 f.write(modified)
@@ -110,6 +115,17 @@ def download(name, cache_dir, refresh):
         else:
             print(f'cached     {name}')
     return path, modified
+
+
+def complete(part, length):
+    """Stop when the downloaded file is shorter than announced or is not a zip file."""
+    size = os.path.getsize(part)
+    if length is not None and size != int(length):
+        os.remove(part)
+        raise ValueError(f'{part}: got {size:,} of {int(length):,} bytes')
+    if not zipfile.is_zipfile(part):
+        os.remove(part)
+        raise ValueError(f'{part}: not a zip file')
 
 
 def read_rows(zip_path, source):
@@ -140,15 +156,27 @@ def number(value):
     return int(value) if value == int(value) else round(value, 6)
 
 
+def cell(value, flag):
+    """(value, flag) of one FAOSTAT row. A row without a value is a gap, whatever its flag says.
+
+    FAO marks a year in which the value cannot exist with the flag M. It is a gap too.
+    """
+    if len(flag) > 1:
+        raise ValueError(f'unexpected flag {flag!r}')
+    if not value or flag == MISSING_FLAG:
+        return None, ' '
+    if not flag:
+        raise ValueError(f'the value {value!r} has no flag')
+    return float(value), flag
+
+
 def series(rows, years):
-    """Return (values, flags) aligned to years. A year without a value is None."""
+    """Return (values, flags) aligned to years. A year without a value is None and has a space flag."""
     values, flags = [], []
     for year in years:
-        value, flag = rows.get(year, (None, ''))
+        value, flag = rows.get(year, (None, ' '))
         values.append(None if value is None else number(value))
-        if len(flag) > 1:
-            raise ValueError(f'unexpected flag {flag!r}')
-        flags.append(flag or ' ')
+        flags.append(flag)
     return values, ''.join(flags)
 
 
@@ -206,9 +234,11 @@ def read_script(path, name):
 
 def is_current(old, stamps):
     """True when `old`, the data in the data file, came from the files that FAOSTAT has now."""
-    built = ((old or {}).get('meta') or {}).get('sources') or {}
-    return all(stamps.get(key) and built.get(key, {}).get('lastModified') == stamps[key]
-               for key in SOURCES)
+    old = old or {}
+    built = (old.get('meta') or {}).get('sources') or {}
+    return (all(old.get(key) for key in ('years', 'world', 'areas'))
+            and all(stamps.get(key) and built.get(key, {}).get('lastModified') == stamps[key]
+                    for key in SOURCES))
 
 
 def write_status(directory, checked):
@@ -260,14 +290,19 @@ def export_check(areas, years, min_tonnes, from_year=CHECK_FROM_YEAR, bounds=PRI
 
 
 def world_export_gaps(areas, world, years, tolerance=WORLD_GAP):
-    """The years in which the FAO World export quantity differs from the sum of the country rows."""
+    """The years in which the FAO World export quantity differs from the sum of the country rows.
+
+    The difference is a share of the sum of the countries. A year without a World value is not compared.
+    """
     gaps = []
     for i, year in enumerate(years):
         w = world['exportQty'][i]
-        if w:
-            total = sum(a['exportQty'][i] or 0 for a in areas)
-            if abs(total - w) / w > tolerance:
-                gaps.append({'year': year, 'countries': round(total), 'world': round(w)})
+        if w is None:
+            continue
+        total = sum(a['exportQty'][i] or 0 for a in areas)
+        base = total or w
+        if base and abs(total - w) / base > tolerance:
+            gaps.append({'year': year, 'countries': round(total), 'world': round(w)})
     return gaps
 
 
@@ -350,11 +385,12 @@ def build(cache_dir, refresh, day):
         count = 0
         for row in read_rows(path, source):
             count += 1
-            value = row['Value']
             names.setdefault(row['Area Code'], row['Area'])
-            table = tables[source['tables'][row['Element Code']]]
-            table.setdefault(row['Area Code'], {})[int(row['Year'])] = (
-                float(value) if value else None, row['Flag'])
+            rows = tables[source['tables'][row['Element Code']]].setdefault(row['Area Code'], {})
+            year = int(row['Year'])
+            if year in rows:
+                raise ValueError(f"two rows for area {row['Area Code']} in {year} in {source['zip']}")
+            rows[year] = cell(row['Value'], row['Flag'])
         if not count:
             raise ValueError(f"no honey rows found in {source['zip']}")
         flag_text[key] = read_flags(path, source['flags'])
@@ -410,8 +446,10 @@ def build(cache_dir, refresh, day):
         used['production'] |= set(area['productionFlags'])
         used['price'] |= set(area['priceFlags'])
         used['trade'] |= set(area['exportFlags'])
-    for letters in used.values():
+    for key, letters in used.items():
         letters.discard(' ')
+        for f in letters - set(flag_text[key]):
+            raise ValueError(f"the flag {f!r} is not in {SOURCES[key]['flags']}")
 
     data = {
         'meta': {
@@ -474,7 +512,7 @@ def main():
 
     last = data['years'][-1]
     priced = sum(1 for a in data['areas'] if a['price'][-1] is not None)
-    exporters = sum(1 for a in data['areas'] if a['exportFlags'][-1] != ' ')
+    exporters = sum(1 for a in data['areas'] if a['exportConf'][-1] is not None)
     print(f"wrote {args.out} ({os.path.getsize(args.out):,} bytes)")
     print(f"years {data['years'][0]}-{last}, {len(data['areas'])} areas; in {last}: "
           f"world production {data['world']['production'][-1]:,} t, {priced} areas with a producer price, "

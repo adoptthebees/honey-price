@@ -1,9 +1,14 @@
 """Tests for scripts/build_data.py. Run: python3 -m unittest discover -s scripts"""
+import csv
+import http.server
+import io
 import math
 import os
 import sys
 import tempfile
+import threading
 import unittest
+import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_data as b  # noqa: E402
@@ -14,7 +19,8 @@ STAMPS = {key: f'Last-Modified of {key}' for key in b.SOURCES}
 
 def built_from(stamps):
     """The data that a build leaves behind: the stamp of each FAOSTAT file that it used."""
-    return {'meta': {'sources': {key: {'lastModified': value} for key, value in stamps.items()}}}
+    return {'meta': {'sources': {key: {'lastModified': value} for key, value in stamps.items()}},
+            'years': [2024], 'world': {'production': [1]}, 'areas': [{'code': 1}]}
 
 
 class UpToDateTests(unittest.TestCase):
@@ -37,6 +43,13 @@ class UpToDateTests(unittest.TestCase):
         # Without a stamp the files cannot be compared, so the data must be built again.
         blank = dict(STAMPS, **{next(iter(STAMPS)): ''})
         self.assertFalse(b.is_current(built_from(blank), blank))
+
+    def test_stale_when_the_data_file_has_no_areas(self):
+        # A file that holds the stamps but not the data is not complete, so the data must be built again.
+        for key in ('years', 'world', 'areas'):
+            old = built_from(STAMPS)
+            del old[key]
+            self.assertFalse(b.is_current(old, STAMPS), key)
 
 
 class ScriptFileTests(unittest.TestCase):
@@ -121,6 +134,16 @@ class WorldGapTests(unittest.TestCase):
 
     def test_a_year_without_a_world_row_is_not_compared(self):
         self.assertEqual(self.gaps([None, 200], [50, 200]), [])
+
+    def test_the_difference_is_measured_against_the_sum_of_the_countries(self):
+        # 1.01 of 101.01 is under 1%; against the World total it would be over.
+        self.assertEqual(self.gaps([100, 200], [101.01, 200]), [])
+
+    def test_a_world_total_without_country_rows_is_a_gap(self):
+        self.assertEqual(self.gaps([100, 200], [0, 200]), [{'year': 2012, 'countries': 0, 'world': 100}])
+
+    def test_a_world_total_of_zero_against_country_rows_is_a_gap(self):
+        self.assertEqual(self.gaps([0, 200], [50, 200]), [{'year': 2012, 'countries': 50, 'world': 0}])
 
 
 class WorldExportScoreTests(unittest.TestCase):
@@ -308,6 +331,189 @@ class ScoreAreasTests(unittest.TestCase):
         for model in models.values():
             self.assertGreater(model['k90'], 0)
             self.assertGreater(model['k1'], 0)
+
+
+# ---- The FAOSTAT files -----------------------------------------------------------------------
+# Three small zip files in the layout of the FAOSTAT bulk download: one normalized CSV and one
+# flags CSV each. The build reads them through a download function that returns the local path.
+
+FIXTURE_YEARS = list(range(1980, 2020))
+COLUMNS = ['Area Code', 'Area Code (M49)', 'Area', 'Item Code', 'Item Code (CPC)', 'Item',
+           'Element Code', 'Element', 'Year Code', 'Year', 'Unit', 'Value', 'Flag', 'Note']
+PRICE_COLUMNS = COLUMNS[:8] + ['Months Code', 'Months'] + COLUMNS[8:]
+FLAG_ROWS = [('A', 'Official figure'), ('E', 'Estimated value'), ('I', 'Value imputed by a receiving agency'),
+             ('M', 'Missing value; data cannot exist'), ('X', 'Figure from external organization')]
+
+
+def fao_row(code, name, element, year, value, flag, months=None):
+    row = {'Area Code': code, 'Area Code (M49)': f"'{int(code):03d}", 'Area': name, 'Item Code': b.HONEY_ITEM,
+           'Item Code (CPC)': "'02910", 'Item': 'Natural honey', 'Element Code': element, 'Element': 'x',
+           'Year Code': year, 'Year': year, 'Unit': 't', 'Value': value, 'Flag': flag, 'Note': ''}
+    if months is not None:
+        row['Months Code'], row['Months'] = months
+    return row
+
+
+def country_rows(code, name, element, values, flags='A', months=None):
+    """One row for each year. flags is one letter for all rows, or one letter for each year."""
+    per_year = len(flags) == len(values)
+    return [fao_row(code, name, element, year, '' if v is None else v, flags[i] if per_year else flags, months)
+            for i, (year, v) in enumerate(zip(FIXTURE_YEARS, values))]
+
+
+def write_zip(folder, source, rows, columns=COLUMNS, flags=FLAG_ROWS):
+    text = io.StringIO()
+    writer = csv.DictWriter(text, fieldnames=columns)
+    writer.writeheader()
+    writer.writerows(rows)
+    flag_text = 'Flag,Description\n' + ''.join(f'{flag},{description}\n' for flag, description in flags)
+    path = os.path.join(folder, source['zip'])
+    with zipfile.ZipFile(path, 'w') as archive:
+        archive.writestr(source['zip'].replace('.zip', '.csv'), text.getvalue())
+        archive.writestr(source['flags'], flag_text)
+    return path
+
+
+def fixture_rows(production=None, price=None, trade=None):
+    """The rows of each FAOSTAT file: three countries, the World row and two groups."""
+    areas = [scored_area(code) for code in (1, 2, 3)]
+    n = len(FIXTURE_YEARS)
+    production = list(production or [])
+    price = list(price or [])
+    trade = list(trade or [])
+    for a in areas:
+        code, name = str(a['code']), a['name']
+        production += country_rows(code, name, '5510', a['production'])
+        price += country_rows(code, name, '5532', a['price'], months=('7021', 'Annual value'))
+        price += country_rows(code, name, '5532', [p * 2 for p in a['price']], months=('7001', 'January'))
+        trade += country_rows(code, name, '5910', a['exportQty'])
+        trade += country_rows(code, name, '5922', a['exportValue'])
+        trade += country_rows(code, name, '5610', [10] * n)
+    world = [sum(a['production'][i] for a in areas) for i in range(n)]
+    production += country_rows(b.WORLD_AREA, 'World', '5510', world)
+    production += country_rows(b.CHINA_GROUP, 'China', '5510', areas[0]['production'])
+    production += country_rows('5100', 'Africa', '5510', world)
+    production += country_rows('96', 'Europe (excluding Finland)', '5510', world)
+    trade += country_rows(b.WORLD_AREA, 'World', '5910', [sum(a['exportQty'][i] for a in areas) for i in range(n)])
+    trade += country_rows(b.WORLD_AREA, 'World', '5922', [sum(a['exportValue'][i] for a in areas) for i in range(n)])
+    return {'production': production, 'price': price, 'trade': trade}
+
+
+class BuildTests(unittest.TestCase):
+    """The build on the three FAOSTAT files, read from a folder instead of the FAOSTAT server."""
+
+    def build(self, rows, flags=FLAG_ROWS):
+        with tempfile.TemporaryDirectory() as folder:
+            for key, source in b.SOURCES.items():
+                write_zip(folder, source, rows[key], PRICE_COLUMNS if key == 'price' else COLUMNS, flags)
+            original = b.download
+            b.download = lambda name, cache_dir, refresh: (os.path.join(cache_dir, name), f'stamp of {name}')
+            try:
+                return b.build(folder, False, '2026-10-12')
+            finally:
+                b.download = original
+
+    def test_the_build_keeps_the_countries_and_leaves_out_the_groups(self):
+        data = self.build(fixture_rows())
+        self.assertEqual([a['name'] for a in data['areas']], ['Country 1', 'Country 2', 'Country 3'])
+        self.assertEqual(data['years'], FIXTURE_YEARS)
+        self.assertEqual(data['meta']['sources']['trade']['lastModified'], f"stamp of {b.SOURCES['trade']['zip']}")
+
+    def test_the_price_of_a_year_is_the_annual_value_not_a_month(self):
+        data = self.build(fixture_rows())
+        self.assertAlmostEqual(data['areas'][0]['price'][0], scored_area(1)['price'][0], places=5)
+
+    def test_a_row_without_a_value_is_a_gap_whatever_its_flag_says(self):
+        # FAO marks a year in which the value cannot exist with M. The page and the model treat it
+        # as a year without a value, so its flag is a space.
+        rows = fixture_rows(production=country_rows('4', 'Country 4', '5510', [None] * 5 + [100] * 35, 'M' * 5 + 'A' * 35))
+        data = self.build(rows)
+        four = next(a for a in data['areas'] if a['name'] == 'Country 4')
+        self.assertEqual(four['productionFlags'][:6], '     A')
+        self.assertEqual(four['production'][:6], [None] * 5 + [100])
+        self.assertNotIn('M', data['meta']['flags']['production'])
+
+    def test_a_value_without_a_flag_stops_the_build(self):
+        rows = fixture_rows(production=country_rows('4', 'Country 4', '5510', [100] * 40, ''))
+        with self.assertRaisesRegex(ValueError, 'flag'):
+            self.build(rows)
+
+    def test_a_flag_with_two_letters_stops_the_build_even_without_a_value(self):
+        rows = fixture_rows(production=country_rows('4', 'Country 4', '5510', [None] * 40, 'AE'))
+        with self.assertRaisesRegex(ValueError, "'AE'"):
+            self.build(rows)
+
+    def test_two_rows_for_one_country_and_year_stop_the_build(self):
+        extra = country_rows('1', 'Country 1', '5510', [1] * 40)[:1]
+        with self.assertRaisesRegex(ValueError, '1980'):
+            self.build(fixture_rows(production=extra))
+
+    def test_a_flag_letter_that_the_flags_file_lacks_stops_the_build(self):
+        rows = fixture_rows(production=country_rows('4', 'Country 4', '5510', [100] * 40, 'X'))
+        with self.assertRaisesRegex(ValueError, "'X'"):
+            self.build(rows, flags=[f for f in FLAG_ROWS if f[0] != 'X'])
+
+    def test_the_china_group_with_prices_stops_the_build(self):
+        rows = fixture_rows(price=country_rows(b.CHINA_GROUP, 'China', '5532', [1] * 40, months=('7021', 'Annual value')))
+        with self.assertRaisesRegex(ValueError, 'China'):
+            self.build(rows)
+
+
+# ---- The download ----------------------------------------------------------------------------
+
+class CutServer(http.server.BaseHTTPRequestHandler):
+    """Sends the zip file of the test. With `cut`, it sends only half of the bytes it announced."""
+    body = b''
+    cut = False
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Length', str(len(self.body)))
+        self.send_header('Last-Modified', 'Mon, 05 Oct 2026 00:00:00 GMT')
+        self.end_headers()
+        self.wfile.write(self.body[:len(self.body) // 2] if self.cut else self.body)
+
+    def log_message(self, *args):
+        pass
+
+
+class DownloadTests(unittest.TestCase):
+    def setUp(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('data.csv', 'x' * 2000)
+        CutServer.body = buffer.getvalue()
+        CutServer.cut = False
+        self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), CutServer)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base_url = b.BASE_URL
+        b.BASE_URL = f'http://127.0.0.1:{self.server.server_address[1]}/'
+        self.folder = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        b.BASE_URL = self.base_url
+        self.server.shutdown()
+        self.server.server_close()
+        self.folder.cleanup()
+
+    def test_a_complete_download_is_kept_with_its_stamp(self):
+        path, modified = b.download('file.zip', self.folder.name, False)
+        self.assertEqual(modified, 'Mon, 05 Oct 2026 00:00:00 GMT')
+        with open(path + '.modified', encoding='utf-8') as f:
+            self.assertEqual(f.read(), modified)
+        self.assertTrue(zipfile.is_zipfile(path))
+
+    def test_a_cut_off_download_stops_the_build_and_is_not_cached(self):
+        CutServer.cut = True
+        with self.assertRaisesRegex(ValueError, 'bytes'):
+            b.download('file.zip', self.folder.name, False)
+        self.assertEqual(os.listdir(self.folder.name), [])
+
+    def test_a_file_that_is_not_a_zip_file_stops_the_build(self):
+        CutServer.body = b'<html>not found</html>'
+        with self.assertRaisesRegex(ValueError, 'zip'):
+            b.download('file.zip', self.folder.name, False)
+        self.assertEqual(os.listdir(self.folder.name), [])
 
 
 if __name__ == '__main__':

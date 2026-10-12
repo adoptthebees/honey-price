@@ -9,17 +9,18 @@ Range (about 90%)
   1. Reporting error: an assumption for each kind of figure (REPORT_ERROR).
   2. Revision: extra for the last three years, which FAO and national offices revise (REVISION).
   3. Rounding: 24,000 can stand for any figure from 23,500 to 24,500 (rounding_half).
-  4. Estimate error: only for a value that FAO estimated or imputed, or took from another
-     organization (flags E, I, X, B). It is the size of the miss of a guess made from the
-     neighbouring years.
+  4. Estimate error: only for a value that is not official: estimated, imputed, from another
+     organization, or marked with a flag that this module does not know. It is the size of the
+     miss of a guess made from the neighbouring years.
      a. For each country and series, take the official years that have two official neighbours.
         The miss is ln(value) minus the mean of ln(neighbours).
      b. The robust spread of those misses is the country scale. A country with few such years
         borrows a pooled scale from countries of a similar size.
-     c. K is the 90th percentile of the standardized misses of official values. This follows the
-        real tails of the data and does not assume a normal curve.
+     c. K is the 90th percentile of the standardized misses of official values of all countries.
+        This follows the real tails of the data and does not assume a normal curve.
      d. The estimate error is K * country scale * class factor * ESTIMATE_SCALE. The class factor
         is 1, or more when the data show that values of that class miss by more than official ones.
+        A flag outside MODEL_FLAGS has the class factor 1.
   Parts 1 and 2 are assumptions that revisions support. FAO production values that were official
   in an old release and in the current one: in the latest year of a release the range held 92% of
   them (releases of 2022, 2023 and 2025 against the release of 2025). For price, the only
@@ -56,7 +57,7 @@ import math
 import statistics
 
 OFFICIAL = 'A'
-MODEL_FLAGS = 'EIXB'        # flags that get an estimate error
+MODEL_FLAGS = 'EIXB'        # non-official flags that get a class factor of their own
 MIN_RUNS = 6                # official years with official neighbours needed for a country scale
 SHRINK = 6                  # weight of the pooled scale, counted in such years
 MIN_CLASS_N = 20            # values needed to measure a class factor
@@ -85,7 +86,7 @@ ESTIMATE_SCALE = {'production': 2.5, 'price': 1.0, 'export': 1.0}
 # made with scripts/revision_check.py: three FAOSTAT releases of production against the release
 # of 2025-12. They do not change when the data changes.
 EVIDENCE = {
-    'date': '2026-10-11',
+    'date': '2026-10-12',
     'releases': ['2022-09', '2023-12', '2025-02'],
     'against': '2025-12',
     'official': {'n': 136, 'held': 0.919},     # official in both releases, latest year of the old one
@@ -190,6 +191,8 @@ def fit(series):
         size = size_of(values)
         if own is not None and size:
             owns[code] = (own, len(official), size)
+    if not owns:
+        raise ValueError(f'no series has {MIN_RUNS} official values with 2 official neighbours')
     sizes = sorted(s for _, _, s in owns.values())
     n = len(sizes)
     cuts = (sizes[n // 3], sizes[2 * n // 3]) if n >= 6 else (0, 0)
@@ -201,18 +204,17 @@ def fit(series):
         pooled.append(statistics.median(members) if len(members) >= 3 else everyone)
     model = {'cuts': cuts, 'pooled': pooled, 'k90': None, 'k1': None, 'fclass': {}, 'calibration': {}}
 
-    # K from official misses, each one standardized with a scale that leaves the miss out.
+    # K from the official misses of every country, each one standardized with a scale that leaves
+    # the miss out. A country without a scale of its own uses the pooled scale of its group.
     standardized = []   # (code, |d|)
     for code, (values, flags) in series.items():
-        if code not in owns:
-            continue
         res = residuals(values, flags, True)
         points = [(i, r) for i, r in res.items() if flags[i] == OFFICIAL]
         group = group_of(model, values)
         for k, (i, r) in enumerate(points):
             others = [x for j, (_, x) in enumerate(points) if j != k]
             own = robust_sigma(others) if len(others) >= MIN_RUNS else None
-            sigma = shrunk(own, len(others), pooled[group])
+            sigma = shrunk(own, len(others), pooled[group if group is not None else 1])
             if sigma > 0:
                 standardized.append((code, abs(r) / sigma))
     model['k90'] = p90(d for _, d in standardized)
@@ -234,7 +236,7 @@ def fit(series):
         test = [d for c, d in standardized if c % 2 == fold]
         hits += sum(d <= k for d in test)
         total += len(test)
-    model['calibration'] = {'coverage': hits / total, 'n': total, 'countries': len(owns)}
+    model['calibration'] = {'coverage': hits / total, 'n': total, 'countries': len({c for c, _ in standardized})}
 
     # Class factors: do values of a class miss by more than official values do?
     by_class = {f: [] for f in MODEL_FLAGS + OFFICIAL}
@@ -314,10 +316,15 @@ def jump_measures(values, flags, sigma, k, k1):
     return out
 
 
+def whole(x):
+    """The nearest whole number. A half goes up."""
+    return math.floor(x + 0.5)
+
+
 def points(check, measure):
     """Whole points that a check takes off the score for a problem of size `measure`."""
     _, most, full = CHECKS[check]
-    return int(most * min(1.0, measure / full) + 0.5)
+    return whole(most * min(1.0, measure / full))
 
 
 def age_penalty(kind, age):
@@ -372,8 +379,8 @@ def score_series(model, kind, values, flags, last, extra=None):
             why.append(None)
             continue
         age = last - i
-        estimate = (min(CAP, ESTIMATE_SCALE[kind] * k * sigma * model['fclass'][f]['factor'])
-                    if f in MODEL_FLAGS else 0.0)
+        estimate = (min(CAP, ESTIMATE_SCALE[kind] * k * sigma * model['fclass'].get(f, {}).get('factor', 1.0))
+                    if f != OFFICIAL else 0.0)
         half = math.sqrt(REPORT_ERROR[kind] ** 2 + revision_half(kind, age) ** 2
                          + rounding_half(v) ** 2 + estimate ** 2)
         measures = {'jump': jumps[i], 'history': history_share(flags, i), 'thin': thin,
@@ -418,7 +425,7 @@ def aggregate_conf(values, confs):
     weight = sum(v for v, _ in pairs)
     if not weight:
         return None
-    return max(MIN_SCORE, min(MAX_SCORE, round(sum(v * c for v, c in pairs) / weight)))
+    return max(MIN_SCORE, min(MAX_SCORE, whole(sum(v * c for v, c in pairs) / weight)))
 
 
 def score_total(kind, total, parts, age):
