@@ -188,7 +188,9 @@
         if (v == null) p.delete(k);
         else p.set(k, String(v));
       }
-      try { history.replaceState(null, '', '#' + p); } catch (e) { /* some pages refuse this */ }
+      // Without a key, the address has no # part at all, so a bookmark keeps no stale selection.
+      const target = String(p) ? '#' + p : location.pathname + location.search;
+      try { history.replaceState(null, '', target); } catch (e) { /* some pages refuse this */ }
     },
   };
 

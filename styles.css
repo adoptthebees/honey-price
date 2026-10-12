@@ -179,6 +179,8 @@ th[aria-sort="descending"] button.sort::after { content: "\25BC"; font-size: 0.7
   vertical-align: middle;
 }
 .badge[hidden] { display: none; }
+.year-latest { margin-left: 10px; font-size: 0.85rem; }
+.year-latest[hidden] { display: none; }
 .hint { margin: 4px 0 0; max-width: 260px; color: var(--muted); font-size: 0.8rem; }
 .hint.year { max-width: min(520px, 80vw); }
 .card .sub button.link { font-size: inherit; }

@@ -79,8 +79,15 @@
     if (p.has('a') && byCode.has(a)) state.area = a;
     state.official = p.get('o') === '1';
   }
+  // The address keeps only what differs from the default: the last year, pounds, no country, the
+  // switch off. So a link or a bookmark made in one year still opens the last year in the next.
   function writeHash() {
-    hash.write({ y: state.year, u: state.unit, a: state.area, o: state.official ? '1' : null });
+    hash.write({
+      y: state.year === lastPageYear ? null : state.year,
+      u: state.unit === 'lb' ? null : state.unit,
+      a: state.area,
+      o: state.official ? '1' : null,
+    });
   }
 
   // ---- Points ----------------------------------------------------------------
@@ -814,6 +821,8 @@
     $('year').value = state.year;
     $('year-out').textContent = state.year;
     $('provisional').hidden = beyondFao() || !isProvisional(state.year);
+    $('year-latest').hidden = state.year === lastPageYear;
+    $('year-latest').textContent = `Go to ${lastPageYear}, the last year`;
     $('year-hint').textContent = beyondFao()
       ? `FAOSTAT has no values for ${state.year} yet. The World and country parts show ${lastYear}, its last year. The United States parts show ${state.year}.`
       : (usYears.length ? `FAOSTAT values end in ${lastYear}. The United States has USDA values to ${lastPageYear}.` : '');
@@ -839,6 +848,7 @@
     radio.addEventListener('change', () => { state.unit = radio.value; render(); });
   }
   $('official').addEventListener('change', (ev) => { state.official = ev.target.checked; render(); });
+  $('year-latest').addEventListener('click', () => { state.year = lastPageYear; render(); });
   $('search').addEventListener('input', (ev) => { state.query = ev.target.value; render(); });
   headRow.addEventListener('click', (ev) => {
     const th = ev.target.closest('th');

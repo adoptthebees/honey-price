@@ -14,7 +14,9 @@ A browser keeps a file of the page for some minutes. Thus the address of each sc
 
 ## Controls
 
-The year control is a slider. It goes from the first year to the last year of all the data, from FAOSTAT and from the USDA. The page starts in the last year. A change of the year changes all the values on the page. The text below the slider gives the last year of FAOSTAT and the last year of the United States data. The text below the title gives the first year and the last year of each source.
+The year control is a slider. It goes from the first year to the last year of all the data, from FAOSTAT and from the USDA. The page starts in the last year. A change of the year changes all the values on the page. When the page is not in the last year, a link next to the year moves the page to the last year.
+
+The text below the slider gives the last year of FAOSTAT and the last year of the United States data. The text below the title gives the first year and the last year of each source.
 
 The USDA data go after the last year of FAOSTAT. When the page is in such a year, the FAOSTAT parts show the last year of FAOSTAT. Each of these parts gives this year in its heading, with the words "the last FAOSTAT year". The panel about the data of the year also tells that FAOSTAT has no values for the selected year. The United States parts show the selected year.
 
@@ -38,6 +40,8 @@ The page keeps the year, the unit and the other selections in the part of the ad
 | `o` | The value 1 when the switch "Official values only" is on |
 
 For example, `#y=2023&u=lb&a=183&o=1` opens the page for the year 2023, in pounds, with Romania in the country panel, and with official values only. A key with an incorrect value does not change the selection.
+
+The page writes a key only when its value is not the initial value. The initial values are the last year, the unit `lb`, no country and the switch off. When each value is the initial value, the address has no part after the symbol #. Thus a link from one year does not keep the page in that year after an update of the data.
 
 ## Top of the page
 
