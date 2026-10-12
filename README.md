@@ -14,7 +14,7 @@ A GitHub workflow looks for newer FAOSTAT files each week. When it finds them, i
 
 ## Tests
 
-To do the tests, use `python3 -m unittest discover -s scripts`.
+To do the tests, use `python3 -m unittest discover -s scripts`. After a change of `styles.css`, `ui.js`, `app.js` or `us.js`, use `python3 scripts/stamp_page.py`. It writes the version of each file into `index.html`. Thus a browser gets the new file.
 
 To examine the documents, use `python3 scripts/check_docs.py`. Add the option `--vocabulary` to examine each word against the dictionary of the ASD-STE100 specification. The file `AGENTS.md` gives the rules for the documents.
 

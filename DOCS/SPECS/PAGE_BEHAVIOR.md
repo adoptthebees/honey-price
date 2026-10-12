@@ -10,6 +10,8 @@ The file `index.html` has the structure and the text of the page. The file `styl
 
 The files `data/honey_data.js`, `data/honey_status.js`, `data/us_supply.js` and `data/us_status.js` have the data. The file `DATA_SOURCES.md` is the specification of these files.
 
+A browser keeps a file of the page for some minutes. Thus the address of each script file and of the style file in `index.html` has a version, for example `app.js?v=1a2b3c4d`. The version is the start of the hash of the file. The script `scripts/stamp_page.py` writes the versions. A test gives an error when `index.html` does not have the versions of the files.
+
 ## Controls
 
 The year control is a slider. It goes from the first year to the last year of all the data, from FAOSTAT and from the USDA. The page starts in the last year. A change of the year changes all the values on the page. The text below the slider gives the last year of FAOSTAT and the last year of the United States data. The text below the title gives the first year and the last year of each source.
