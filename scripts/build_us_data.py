@@ -85,8 +85,12 @@ TIME_DATE = re.compile(r'<time[^>]*datetime="([^"]*)"')
 HREF = re.compile(r'href="([^"]+)"')
 
 
+# ESMIS answers a request without a User-Agent with an empty release list. This one names the tool.
+USER_AGENT = 'honey-price/1.0 (+https://github.com/adoptthebees/honey-price)'
+
+
 def fetch(url, data=None, headers=None):
-    request = urllib.request.Request(url, data=data, headers=headers or {})
+    request = urllib.request.Request(url, data=data, headers={'User-Agent': USER_AGENT, **(headers or {})})
     with urllib.request.urlopen(request, timeout=120) as response:
         return response.read()
 
@@ -129,6 +133,8 @@ def release_rows(html):
 
 def to_releases(rows, publication):
     """Keep the releases with a zip file, which holds the data. A notice without a zip is skipped."""
+    if not rows:
+        raise ValueError(f'{publication}: ESMIS sent an empty release list')
     releases = [{'date': date, 'publication': publication, 'url': BASE_URL + path}
                 for date, path in rows if path]
     if not releases:
@@ -162,7 +168,8 @@ def download(url, cache_dir, refresh):
         return path
     os.makedirs(cache_dir, exist_ok=True)
     part = path + '.part'
-    with urllib.request.urlopen(url, timeout=120) as response:
+    request = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
+    with urllib.request.urlopen(request, timeout=120) as response:
         with open(part, 'wb') as out:
             shutil.copyfileobj(response, out)
         length = response.headers.get('Content-Length')

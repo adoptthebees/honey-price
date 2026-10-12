@@ -252,8 +252,10 @@ class CutServer(http.server.BaseHTTPRequestHandler):
     """Sends the zip file of the test. With `cut`, it sends only half of the bytes it announced."""
     body = b''
     cut = False
+    agents = []
 
     def do_GET(self):
+        CutServer.agents.append(self.headers.get('User-Agent', ''))
         self.send_response(200)
         self.send_header('Content-Length', str(len(self.body)))
         self.end_headers()
@@ -296,6 +298,16 @@ class DownloadTests(unittest.TestCase):
         CutServer.cut = True  # a second request would give a cut-off file and an error
         self.assertEqual(us.download(self.url, self.folder.name, False), path)
 
+    def test_each_request_names_this_tool_in_its_user_agent(self):
+        # ESMIS answers a request without a User-Agent with an empty release list.
+        CutServer.agents = []
+        us.download(self.url, self.folder.name, False)
+        us.fetch(self.url)
+        self.assertEqual(len(CutServer.agents), 2)
+        for agent in CutServer.agents:
+            self.assertIn('honey-price', agent)
+            self.assertNotIn('Python-urllib', agent)
+
 
 PAGE = '''<tbody>
 <tr>
@@ -331,6 +343,11 @@ class ReleaseListTests(unittest.TestCase):
     def test_a_list_without_a_zip_file_stops_with_an_error(self):
         with self.assertRaisesRegex(ValueError, 'zip'):
             us.to_releases([('2019-02-06', None)], 'Honey')
+
+    def test_an_empty_list_stops_with_its_own_message(self):
+        # ESMIS sends an empty list to a request that it does not accept. The message must say so.
+        with self.assertRaisesRegex(ValueError, 'empty'):
+            us.to_releases([], 'Honey')
 
 
 class RealFileTests(unittest.TestCase):
