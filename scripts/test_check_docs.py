@@ -1,10 +1,11 @@
 """Tests for scripts/check_docs.py. Run: python3 -m unittest discover -s scripts"""
+import http.client
 import os
 import sys
 import tempfile
 import unittest
 from io import StringIO
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -458,6 +459,145 @@ class VocabularyModeTests(unittest.TestCase):
                 cd.save_dictionary(cache, frozenset({"use"}), {"ensure": ["make sure"]})
                 approved, unapproved = cd.load_dictionary(cache)
         self.assertEqual((approved, unapproved), (frozenset({"use"}), {"ensure": ["make sure"]}))
+
+
+class UnreadableDictionaryTests(unittest.TestCase):
+    def run_main(self):
+        with tempfile.TemporaryDirectory() as cache, tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, "NOTE.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("Use the data.\n")
+            err = StringIO()
+            with redirect_stderr(err), redirect_stdout(StringIO()):
+                code = cd.main(["--vocabulary", "--cache", cache, path])
+        return code, err.getvalue()
+
+    def test_text_without_the_word_list_header_raises_dictionary_error(self):
+        with self.assertRaises(cd.DictionaryError):
+            cd.parse_dictionary("garbage\nabaft (prep) aft of\n")
+
+    def test_a_pdf_without_the_word_list_header_gives_exit_code_two(self):
+        with mock.patch.object(cd, "download_pdf", return_value="unused.pdf"):
+            with mock.patch.object(cd, "pdf_text", return_value="garbage\nabaft (prep) aft of\n"):
+                code, err = self.run_main()
+        self.assertEqual(code, 2)
+        self.assertEqual(len(err.strip().splitlines()), 1)
+
+    def test_a_download_cut_off_gives_exit_code_two(self):
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.side_effect = http.client.IncompleteRead(b"part")
+        with mock.patch.object(cd.urllib.request, "urlopen", return_value=response):
+            with mock.patch.object(cd.time, "sleep"):
+                code, err = self.run_main()
+        self.assertEqual(code, 2)
+        self.assertEqual(len(err.strip().splitlines()), 1)
+
+
+class HtmlCommentTests(unittest.TestCase):
+    def test_a_multi_line_comment_is_not_checked(self):
+        text = "<!--\nThis should be fixed.\n\nIt may fail.\n-->\nThis line is fine.\n"
+        self.assertEqual(cd.check_text(text, frozenset()), [])
+
+    def test_text_after_a_multi_line_comment_is_checked_at_its_own_line(self):
+        text = "<!--\nThis should be fixed.\n\nIt may fail.\n-->\nThis should fail.\n"
+        probs = cd.check_text(text, frozenset())
+        self.assertEqual([(p.rule, p.line) for p in probs], [("WORD", 6)])
+
+
+class QuotedTermTests(unittest.TestCase):
+    def test_words_after_a_quote_that_is_a_sentence_fragment_are_checked(self):
+        text = 'Use the "file. Then ensure the output; keep it. Say "done".\n'
+        probs = cd.check_text(text, frozenset())
+        messages = [p.message for p in probs if p.rule == "WORD"]
+        self.assertTrue(any("ensure" in m for m in messages), messages)
+        self.assertTrue(any(p.rule == "SEMICOLON" for p in probs))
+
+    def test_the_table_row_of_agents_md_passes(self):
+        probs = cd.check_text('| "ensure" | "make sure" |\n| --- | --- |\n', frozenset())
+        self.assertFalse(any(p.rule == "WORD" for p in probs))
+
+    def test_a_quoted_term_may_contain_a_semicolon(self):
+        probs = cd.check_text('The flag says "Missing value; data cannot exist".\n', frozenset())
+        self.assertFalse(any(p.rule in ("SEMICOLON", "ING") for p in probs), probs)
+
+    def test_a_quoted_term_may_contain_a_question_mark(self):
+        probs = cd.check_text('The panel title is "How reliable is the year?".\n', frozenset())
+        self.assertEqual([p for p in probs if p.rule != "PASSIVE"], [])
+
+    def test_a_semicolon_is_reported_when_the_quotes_on_the_line_are_unbalanced(self):
+        probs = cd.check_text('Use "a; b" and "c.\n', frozenset())
+        self.assertTrue(any(p.rule == "SEMICOLON" for p in probs))
+
+
+class CurlyApostropheTests(unittest.TestCase):
+    def test_a_contraction_with_an_ascii_or_curly_apostrophe_triggers(self):
+        for text in ("It isn't here.\n", "It isn\u2019t here.\n"):
+            probs = cd.check_text(text, frozenset())
+            self.assertTrue(any(p.rule == "CONTRACTION" for p in probs), text)
+
+
+class SentenceSplitTests(unittest.TestCase):
+    def test_a_full_stop_after_an_abbreviation_does_not_end_a_sentence(self):
+        for text in (
+            "Send it to the U.S. Office now.",
+            "Use a fruit, e.g. The apple.",
+            "Use a fruit, i.e. The apple.",
+            "Ask Dr. Smith now.",
+            "Ask Mr. Smith now.",
+            "Ask Mrs. Smith now.",
+            "Ask Ms. Smith now.",
+            "Use item No. Two now.",
+            "See Fig. Two now.",
+            "Use a rule, etc. The end.",
+        ):
+            self.assertEqual(len(cd.split_sentences(text)), 1, text)
+
+    def test_a_single_capital_letter_ends_a_sentence(self):
+        self.assertEqual(len(cd.split_sentences("The value is divided by K. The neighbors differ.")), 2)
+
+    def test_a_decimal_number_does_not_end_a_sentence(self):
+        self.assertEqual(len(cd.split_sentences("The value is 1.645 for each file.")), 1)
+
+    def test_a_full_stop_before_a_capital_still_ends_a_sentence(self):
+        self.assertEqual(len(cd.split_sentences("Use the file. Then keep it.")), 2)
+
+    def test_a_sentence_with_an_abbreviation_is_one_sentence_and_too_long(self):
+        text = ("Send each file to the U.S. Office for review and then keep the copy in the shared "
+                "folder until the end of the month when the next report is due.\n")
+        self.assertEqual(len(cd.split_sentences(text.strip())), 1)
+        probs = cd.check_text(text, frozenset())
+        self.assertTrue(any(p.rule == "LENGTH" for p in probs))
+
+
+class InstructionTests(unittest.TestCase):
+    def test_an_instruction_that_starts_with_include_has_the_20_word_limit(self):
+        probs = cd.check_text("Include " + words(22) + ".\n", frozenset())
+        self.assertTrue(any(p.rule == "LENGTH" for p in probs))
+
+    def test_an_instruction_of_20_words_that_starts_with_include_passes(self):
+        probs = cd.check_text("Include " + words(19) + ".\n", frozenset())
+        self.assertFalse(any(p.rule == "LENGTH" for p in probs))
+
+    def test_note_is_not_an_instruction(self):
+        probs = cd.check_text("Note that " + words(23) + ".\n", frozenset())
+        self.assertFalse(any(p.rule == "LENGTH" for p in probs))
+        self.assertFalse(cd.is_instruction("Note that the file is here."))
+
+
+class HyphenatedWordTests(unittest.TestCase):
+    def test_a_disapproved_part_of_a_hyphenated_word_is_reported(self):
+        probs = cd.check_text("Use the per-pound price.\n", frozenset())
+        self.assertTrue(any(p.rule == "WORD" and "per" in p.message for p in probs))
+
+    def test_a_word_in_backticks_is_not_checked(self):
+        probs = cd.check_text("Run `check_docs` now.\n", frozenset())
+        self.assertFalse(any(p.rule == "WORD" for p in probs))
+
+    def test_the_same_word_outside_backticks_is_checked(self):
+        probs = cd.check_text("Run check_docs now.\n", frozenset())
+        self.assertTrue(any(p.rule == "WORD" for p in probs))
+
+
 
 
 if __name__ == "__main__":

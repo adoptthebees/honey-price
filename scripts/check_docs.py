@@ -11,6 +11,7 @@ the list in the cache directory. It does not keep the specification in the repos
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import re
@@ -41,9 +42,11 @@ IMPERATIVE_VERBS = frozenset({
     "click", "press", "type", "enter", "change", "edit", "delete", "update",
     "build", "test", "close", "give", "supply", "measure", "apply", "ask",
     "compare", "connect", "define", "download", "get", "hold", "identify", "let",
-    "list", "load", "mark", "move", "name", "note", "pull", "record", "reload",
+    "list", "load", "mark", "move", "name", "pull", "record", "reload",
     "rename", "repeat", "report", "return", "review", "rewrite", "show", "split",
     "take", "tell", "try", "turn", "upload", "view", "wait", "work", "do",
+    "attach", "confirm", "continue", "disconnect", "enable", "disable", "include", "look",
+    "restart", "store", "sort", "filter",
 })
 
 ING_ALLOW = frozenset({
@@ -82,11 +85,14 @@ for _w, _repl in (
     DISAPPROVED[_w] = _repl
 
 CONTRACTION_RE = re.compile(
-    r"\w+n't|\w+['\u2019](?:ll|re|ve|d|m)\b|"
+    r"\w+n['\u2019]t|\w+['\u2019](?:ll|re|ve|d|m)\b|"
     r"\b(?:it|that|there|what|here|let|he|she|who)['\u2019]s\b",
     re.IGNORECASE,
 )
 ABBREV_RE = re.compile(r"e\.g\.|i\.e\.|etc\.|(?<![A-Za-z])etc(?![A-Za-z])", re.IGNORECASE)
+# A full stop after one of these does not end a sentence: U.S., e.g., i.e., etc., vs., Dr., Mr., Mrs.,
+# Ms., No., Fig. A single capital letter does not count, so K. ends a sentence.
+ABBREV_BEFORE_RE = re.compile(r"(?<![\w.])(?:(?:[A-Za-z]\.)+[A-Za-z]|etc|vs|Dr|Mr|Mrs|Ms|No|Fig)$")
 BE_FORMS = frozenset({"is", "are", "was", "were", "be", "been", "being"})
 PASSIVE_PARTS = frozenset({
     "made", "given", "written", "shown", "known", "done", "seen", "taken",
@@ -175,7 +181,10 @@ def parse_dictionary(text: str) -> tuple[frozenset[str], dict[str, list[str]]]:
     first = next((i for i, line in enumerate(lines) if line.startswith("abaft (prep)")), None)
     if first is None:
         raise DictionaryError("the word list does not start with the entry abaft")
-    start = max(i for i in range(first) if LIST_HEADER_RE.match(lines[i]))
+    headers = [i for i in range(first) if LIST_HEADER_RE.match(lines[i])]
+    if not headers:
+        raise DictionaryError("the word list has no line that starts with Word Approved")
+    start = headers[-1]
     approved: set[str] = set()
     unapproved: dict[str, list[str]] = {}
     second, third, current = 19, 48, None   # the columns, and the entry that the lines belong to
@@ -231,7 +240,7 @@ def download_pdf(cache_dir: str) -> str:
                 shutil.copyfileobj(response, out)
             os.replace(path + ".part", path)
             return path
-        except OSError as exc:      # URLError is an OSError
+        except (OSError, http.client.HTTPException) as exc:  # URLError is an OSError; IncompleteRead is not
             error = exc
             time.sleep(2 * (attempt + 1))
     raise DictionaryError(f"cannot download {PDF_URL}: {error}")
@@ -380,12 +389,16 @@ def _display_path(path: str, root: str) -> str:
 
 
 def normalize_prose_line(line: str) -> str:
-    line = HTML_COMMENT_RE.sub("", line)
     line = HTML_TAG_RE.sub("", line)
     line = INLINE_CODE_RE.sub("CODE", line)
     line = URL_RE.sub("URL", line)
     line = LINK_RE.sub(lambda m: m.group(1), line)
     return line
+
+
+def keep_line_breaks(match: re.Match) -> str:
+    """Replace a comment by the line breaks that it spans, so that the line numbers do not change."""
+    return "\n" * match.group(0).count("\n")
 
 
 def split_sentences(text: str) -> list[str]:
@@ -401,6 +414,8 @@ def split_sentences(text: str) -> list[str]:
     parts: list[str] = []
     start = 0
     for m in SENTENCE_END.finditer(protected):
+        if ABBREV_BEFORE_RE.search(protected, 0, m.start()):
+            continue
         end = m.start() + 1
         parts.append(protected[start:end].replace("\u0001", "."))
         start = m.end()
@@ -426,16 +441,28 @@ def is_instruction(sentence: str) -> bool:
     return first in IMPERATIVE_VERBS
 
 
+SENTENCE_BOUNDARY_RE = re.compile(r"[.?!] [A-Z]")
+
+
+def is_quoted_phrase(phrase: str) -> bool:
+    """A quoted term may hold a semicolon, a question mark or an exclamation mark. It is a sentence if it holds a sentence boundary."""
+    return not SENTENCE_BOUNDARY_RE.search(phrase)
+
+
+def quotes_balanced(text: str) -> bool:
+    return text.count('"') % 2 == 0 and text.count('\u201c') == text.count('\u201d')
+
+
 def iter_quoted_spans(text: str) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
+    if not quotes_balanced(text):
+        return spans
     i = 0
     while i < len(text):
         if text[i] in ('"', '\u201c'):
             close = '"' if text[i] == '"' else '\u201d'
-            j = i + 1
-            while j < len(text) and text[j] != close:
-                j += 1
-            if j < len(text):
+            j = text.find(close, i + 1)
+            if j != -1 and is_quoted_phrase(text[i + 1:j]):
                 spans.append((i, j + 1))
                 i = j + 1
                 continue
@@ -475,10 +502,11 @@ def check_word_level(
         low = word.lower()
         if in_span(m.start(), quoted) or "." in word:
             continue
-        if low in DISAPPROVED:
+        bad = next((p for p in word.split("-") if p.lower() in DISAPPROVED), None)
+        if bad is not None:
             if low == "may" and word[0].isupper() and next_to_number(text, m):
                 continue
-            out.append(Problem(path, line, "WORD", f"use {DISAPPROVED[low]} instead of {word}", "error"))
+            out.append(Problem(path, line, "WORD", f"use {DISAPPROVED[bad.lower()]} instead of {bad}", "error"))
             continue
         is_ing = len(low) >= 4 and low.endswith("ing")
         if vocabulary and not is_ing and len(low) > 1 and not any(c.isdigit() for c in low) and word not in ("CODE", "URL"):
@@ -533,7 +561,7 @@ def check_length_and_paragraph(
 def check_text(text: str, technical_nouns: frozenset[str] | None = None, path: str = "",
                vocabulary: Vocabulary | None = None) -> list[Problem]:
     ing_allow = ING_ALLOW | (technical_nouns or frozenset())
-    lines = text.splitlines()
+    lines = HTML_COMMENT_RE.sub(keep_line_breaks, text).splitlines()
     out: list[Problem] = []
     in_fence = False
     fence_mark = ""
