@@ -4,7 +4,7 @@
 // It uses the helpers in ui.js (window.HONEY_UI).
 (() => {
   'use strict';
-  const { UNITS, DASH, f0, f2, massBig, fmtMass, massText, priceIn, fmtPrice, frame, hover, hash, unit, h, s, link, INK, HALO } = window.HONEY_UI;
+  const { UNITS, DASH, f0, f2, massBig, fmtMass, massText, priceIn, fmtPrice, frame, hover, unit, year, h, s, link, INK, HALO } = window.HONEY_UI;
 
   const KG_PER_LB = 0.45359237;
   const nf1 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -33,7 +33,6 @@
     sort: { key: 'production', dir: -1 },
   };
   let body = null;
-  let select = null;
 
   function showError() {
     const target = document.getElementById('us-body');
@@ -43,37 +42,31 @@
     if (sub) sub.textContent = MISSING_FILE;
   }
 
-  // The card at the top of the page: the newest year of the United States, which FAOSTAT does
-  // not have yet. It is the first thing a reader sees, so it says which report it comes from.
+  // The card at the top of the page: the United States in the year of the page. It says which
+  // report the values come from, and when they are a first estimate.
   function renderCard(u) {
-    const last = state.usYears[state.usYears.length - 1];
-    const us = state.rowAt.get('0:' + state.years.indexOf(last));
-    const first = state.firstAt.get(last);
-    const [, , rep, , , prod, , price] = us;
-    const report = longDate(state.data.reports[rep].date);
-    const parts = [];
-    if (price != null) parts.push(`Average price ${fmtPrice(usdPerTonneOf(price), u)} per ${UNITS[u].short}.`);
-    parts.push(`USDA NASS, report of ${report}.`);
-    if (first && first[4] == null) parts.push('First estimate: the next report can change it.');
+    const i = state.years.indexOf(state.year);
+    const us = state.rowAt.get('0:' + i);
+    const title = document.getElementById('card-us-title');
+    const big = document.getElementById('card-us-big');
+    const sub = document.getElementById('card-us-sub');
+    title.textContent = `United States, ${state.year}`;
     const go = h('button', { type: 'button', class: 'link', text: 'See the section United States' });
     go.addEventListener('click', () => document.getElementById('us').scrollIntoView({ behavior: 'smooth', block: 'start' }));
-    document.getElementById('card-us-title').textContent = `United States ${last}`;
-    document.getElementById('card-us-big').textContent = prod == null ? DASH : massText(tonnesOf(prod), u);
-    document.getElementById('card-us-sub').replaceChildren(parts.join(' '), ' ', go);
-  }
-
-  // The text at the top of the page says what each source covers, so a reader does not take the
-  // last FAOSTAT year for the last year of the page.
-  function describeCoverage() {
-    const first = state.usYears[0], last = state.usYears[state.usYears.length - 1];
-    const subtitle = document.getElementById('subtitle');
-    if (subtitle) subtitle.append(` United States data from USDA NASS: ${first} to ${last}.`);
-    const hint = document.getElementById('year-hint');
-    const fao = window.HONEY_DATA && window.HONEY_DATA.years;
-    if (hint && fao) {
-      hint.textContent = `FAOSTAT values end in ${fao[fao.length - 1]}. `
-        + `The United States has USDA values to ${last}: see the card and the section below.`;
+    if (!us) {
+      const first = state.usYears[0], last = state.usYears[state.usYears.length - 1];
+      big.textContent = DASH;
+      sub.replaceChildren(`No USDA value for ${state.year}. The data go from ${first} to ${last}.`, ' ', go);
+      return;
     }
+    const [, , rep, , , prod, , price] = us;
+    const first = state.firstAt.get(state.year);
+    const parts = [];
+    if (price != null) parts.push(`Average price ${fmtPrice(usdPerTonneOf(price), u)} per ${UNITS[u].short}.`);
+    parts.push(`USDA NASS, report of ${longDate(state.data.reports[rep].date)}.`);
+    if (first && first[4] == null) parts.push('First estimate: the next report can change it.');
+    big.textContent = prod == null ? DASH : massText(tonnesOf(prod), u);
+    sub.replaceChildren(parts.join(' '), ' ', go);
   }
 
   function prepare(data) {
@@ -216,7 +209,7 @@
         return raw == null ? m.t : Y(toPlot(raw));
       },
       onPick(j) {
-        if (state.rowAt.has('0:' + j)) pick(state.years[j]);
+        if (state.rowAt.has('0:' + j)) year.set(state.years[j]);
       },
     });
     box.append(f.svg, tip);
@@ -259,6 +252,7 @@
     if (!body || !state.data) return;
     const u = unit.get();
     renderCard(u);
+    document.getElementById('us-year').textContent = String(state.year);
     const active = document.activeElement;
     const focusKey = active && active.closest && active.closest('#us-table') ? active.dataset.key : null;
     body.replaceChildren();
@@ -266,7 +260,7 @@
     const us = state.rowAt.get('0:' + i);
     if (!us) {
       const first = state.usYears[0], last = state.usYears[state.usYears.length - 1];
-      body.append(h('p', { class: 'note', text: `No data for this year. The data go from ${first} to ${last}.` }));
+      body.append(h('p', { class: 'note', text: `No USDA data for ${state.year}. The data go from ${first} to ${last}.` }));
       return;
     }
     const prodBox = h('div', { class: 'chart' }, h('h3', { text: `Production (${UNITS[u].big})` }));
@@ -292,28 +286,13 @@
     }
   }
 
-  function pick(year) {
-    state.year = year;
-    select.value = String(year);
-    hash.write({ uy: year });
-    render();
-  }
-
   function init() {
     if (!window.HONEY_US_SUPPLY) { showError(); return; }
     prepare(window.HONEY_US_SUPPLY);
     body = document.getElementById('us-body');
-    select = document.getElementById('us-year');
     body.replaceChildren();
-    const desc = state.usYears.slice().reverse();
-    select.replaceChildren(...desc.map((y) => h('option', { value: y, text: String(y) })));
-
-    // The address may name a year; an unknown or invalid year falls back to the last year.
-    const want = Number(hash.read().get('uy'));
-    state.year = state.usYears.includes(want) ? want : state.usYears[state.usYears.length - 1];
-    select.value = String(state.year);
-
-    select.addEventListener('change', () => pick(Number(select.value)));
+    state.year = year.get();
+    year.onChange((y) => { state.year = y; render(); });
     body.addEventListener('click', (ev) => {
       const b = ev.target.closest('button.sort');
       if (!b) return;
@@ -328,7 +307,6 @@
       clearTimeout(timer);
       timer = setTimeout(render, 150);
     });
-    describeCoverage();
     render();
   }
 

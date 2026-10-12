@@ -18,7 +18,7 @@
   }
 
   // ---- Shared helpers (ui.js) ------------------------------------------------
-  const { UNITS, DASH, f0, massBig, fmtMass, massText, priceIn, fmtPrice, fmtShare, pct, norm, h, s, link, uid, INK, HALO, frame, hover, hash } = window.HONEY_UI;
+  const { UNITS, DASH, f0, massBig, fmtMass, massText, priceIn, fmtPrice, fmtShare, pct, norm, h, s, link, uid, INK, HALO, frame, hover, hash, year: pageYear } = window.HONEY_UI;
 
   // ---- FAOSTAT flags ---------------------------------------------------------
   // "A" means official, so it gets no mark. The other letters say how a value was made.
@@ -55,13 +55,24 @@
   const provisionalFrom = years.length - RUBRIC.provisionalYears;
   const isProvisional = (year) => yearIndex.get(year) >= provisionalFrom;
 
+  // The page covers the years of every source. The United States data (data/us_supply.js) go
+  // beyond the last FAOSTAT year. In such a year the FAOSTAT panels show the last FAOSTAT year
+  // and say so: faoYear() is the year that they show.
+  const usYears = (window.HONEY_US_SUPPLY || {}).years || [];
+  const firstPageYear = Math.min(years[0], ...usYears);
+  const lastPageYear = Math.max(lastYear, ...usYears);
+  const faoYear = () => Math.min(Math.max(state.year, years[0]), lastYear);
+  const beyondFao = () => state.year > lastYear;
+  // The year of a FAOSTAT panel, with its label when the page is in a later year.
+  const faoLabel = () => (beyondFao() ? `${faoYear()}, the last FAOSTAT year` : String(faoYear()));
+
   // ---- State -----------------------------------------------------------------
-  const state = { year: lastYear, unit: 'lb', area: null, sort: 'production', dir: -1, query: '', official: false };
+  const state = { year: lastPageYear, unit: 'lb', area: null, sort: 'production', dir: -1, query: '', official: false };
 
   function readHash() {
     const p = new URLSearchParams(location.hash.slice(1));
     const y = Number(p.get('y'));
-    if (yearIndex.has(y)) state.year = y;
+    if (Number.isInteger(y) && y >= firstPageYear && y <= lastPageYear) state.year = y;
     const u = p.get('u');
     if (u && Object.hasOwn(UNITS, u)) state.unit = u;
     const a = Number(p.get('a'));
@@ -404,14 +415,14 @@
     stackChart($('quality-chart'), {
       rows: COMPOSITION,
       label: `Production by source, ${years[0]} to ${lastYear}`,
-      marker: yearIndex.get(state.year),
+      marker: yearIndex.get(faoYear()),
       tip: compositionTip,
       onPick: pickYear,
     });
   }
 
   function drawWorldCharts() {
-    const unit = state.unit, u = UNITS[unit], marker = yearIndex.get(state.year);
+    const unit = state.unit, u = UNITS[unit], marker = yearIndex.get(faoYear());
     lineChart($('world-chart'), {
       pts: pointSeries(D.world, 'production'),
       conv: (t) => massBig(t, unit),
@@ -486,6 +497,10 @@
 
   function renderCards(model) {
     const unit = state.unit, u = UNITS[unit], i = model.i;
+    // Each FAOSTAT area names its year, because the page can be in a later year.
+    $('card-production-title').textContent = `World production, ${faoLabel()}`;
+    $('card-export-title').textContent = `World export price, ${faoLabel()}`;
+    $('card-range-title').textContent = `Producer price range, ${faoLabel()}`;
 
     const wp = model.wp;
     $('card-production').textContent = wp ? `${fmtMass(wp.value, unit)} ${u.big}` : DASH;
@@ -497,17 +512,17 @@
         + (wp.band ? ` Range ${fmtMass(wp.lo, unit, wp.hi)} to ${fmtMass(wp.hi, unit, wp.hi)} ${u.big}.` : '')
         + ` Confidence ${wp.conf} (${tierOf(wp.conf).name}).`;
     } else {
-      $('card-production-sub').textContent = `No value for ${state.year}.`;
+      $('card-production-sub').textContent = `No value for ${faoYear()}.`;
     }
 
     // The world export price uses the World row of FAOSTAT: export value divided by export quantity.
     const we = pointOf(D.world, 'export', i);
     if (!we) {
       $('card-export').textContent = DASH;
-      $('card-export-sub').textContent = `FAOSTAT has no export values for ${state.year}.`;
+      $('card-export-sub').textContent = `FAOSTAT has no export values for ${faoYear()}.`;
     } else {
-      const q = qualityFor(state.year);
-      const gap = worldGapOf(state.year);
+      const q = qualityFor(faoYear());
+      const gap = worldGapOf(faoYear());
       $('card-export').textContent = `${fmtPrice(we.value, unit)} per ${u.short}`;
       $('card-export-sub').textContent = `Export value divided by export quantity. ${massText(D.world.exportQty[i], unit)} exported.`
         + (q.expT ? ` ${pct((q.exp.A || 0) / q.expT)} of the tonnage is official.` : '')
@@ -518,8 +533,8 @@
     const priced = model.rows.filter((r) => r.pc).sort((x, y) => x.price - y.price);
     if (!priced.length) {
       $('card-range').textContent = DASH;
-      $('card-range-sub').textContent = state.year < firstPriceYear
-        ? `Producer prices start in ${firstPriceYear}.` : `No producer price for ${state.year}.`;
+      $('card-range-sub').textContent = faoYear() < firstPriceYear
+        ? `Producer prices start in ${firstPriceYear}.` : `No producer price for ${faoYear()}.`;
     } else {
       const low = priced[0], high = priced[priced.length - 1];
       $('card-range').textContent = `${fmtPrice(low.price, unit)} to ${fmtPrice(high.price, unit)} per ${u.short}`;
@@ -529,9 +544,12 @@
 
   // ---- Reliability list ------------------------------------------------------
   function renderQuality() {
-    const q = qualityFor(state.year);
-    $('quality-year').textContent = state.year;
+    const q = qualityFor(faoYear());
+    $('quality-year').textContent = faoLabel();
     const items = [];
+    if (beyondFao()) {
+      items.push(`FAOSTAT has no values for ${state.year} yet. This panel, the World charts and the table show ${faoYear()}, its last year.`);
+    }
     if (q.listed > 0) {
       const world = q.world == null ? '' : ` The listed countries make ${fmtShare(q.listed / q.world)} of the world total.`;
       items.push(`Production by source: ${breakdown(q.prod, q.listed)}.${world}`);
@@ -539,19 +557,19 @@
       items.push(`Production confidence, ${t.high + t.medium + t.low + t.vlow} countries: ${t.high} high (80 or more), ${t.medium} medium (60 to 79), `
         + `${t.low} low (40 to 59), ${t.vlow} very low (under 40).`);
     } else {
-      items.push(`Production: FAOSTAT has no values for ${state.year}.`);
+      items.push(`Production: FAOSTAT has no values for ${faoYear()}.`);
     }
     items.push(q.nPrice
       ? `Producer price: ${q.nPrice} countries, ${breakdown(q.price, q.nPrice)}.`
-      : `Producer price: FAOSTAT has none for ${state.year}.`);
+      : `Producer price: FAOSTAT has none for ${faoYear()}.`);
     items.push(q.nExp
       ? `Export price: ${q.nExp} countries exported ${MIN_EXPORT_TONNES} tonnes or more. By tonnage, ${breakdown(q.exp, q.expT)}. `
         + `${q.smallN} smaller exporters have no price, because small exports give noisy averages. They export ${pct(q.smallT / (q.expT + q.smallT))} of the tonnage.`
-      : (q.smallN ? `Export price: no country exported ${MIN_EXPORT_TONNES} tonnes or more.` : `Export price: FAOSTAT has none for ${state.year}.`));
+      : (q.smallN ? `Export price: no country exported ${MIN_EXPORT_TONNES} tonnes or more.` : `Export price: FAOSTAT has none for ${faoYear()}.`));
     const list = items.map((text) => h('li', { text }));
-    if (isProvisional(state.year)) {
+    if (isProvisional(faoYear())) {
       list.push(h('li', {},
-        `${state.year} is provisional: FAO and national offices revise the last three years. `,
+        `${faoYear()} is provisional: FAO and national offices revise the last three years. `,
         h('a', { href: '#sources', text: 'See an example.' })));
     }
     $('quality-list').replaceChildren(...list);
@@ -643,7 +661,8 @@
     const listedShare = model.world ? listed / model.world : null;
     const gap = !state.official && listedShare != null && listedShare < 0.9995
       ? ` The listed countries make ${fmtShare(listedShare)} of it. The rest has no country row in FAOSTAT.` : '';
-    $('table-note').textContent = `${shown.length} of ${model.rows.length} countries and areas in ${state.year}. `
+    $('countries-title').textContent = `Countries and areas, ${faoLabel()}`;
+    $('table-note').textContent = `${shown.length} of ${model.rows.length} countries and areas in ${faoYear()}. `
       + `${count('price')} have a producer price and ${count('exportPrice')} an export price (${MIN_EXPORT_TONNES} tonnes or more exported). `
       + `Shares use the FAOSTAT world total.${gap} `
       + 'FAOSTAT "China" is the sum of China, mainland and Taiwan Province of China, so the table lists those two. '
@@ -678,13 +697,13 @@
         h('h2', { text: a.name }),
         h('button', { type: 'button', class: 'ghost', id: 'clear', text: 'Clear' })),
       h('dl', { class: 'facts' },
-        fact(`Production ${state.year}`, 'production', pp, pp ? `${fmtMass(pp.value, unit)} ${u.big}` : DASH),
+        fact(`Production ${faoYear()}`, 'production', pp, pp ? `${fmtMass(pp.value, unit)} ${u.big}` : DASH),
         h('dt', { text: 'Share of world' }),
         h('dd', { text: fmtShare(share) }),
-        fact(`Producer price ${state.year}`, 'price', pc, pc ? `${fmtPrice(pc.value, unit)} per ${u.short}` : DASH),
-        fact(`Export price ${state.year}`, 'export', pe,
+        fact(`Producer price ${faoYear()}`, 'price', pc, pc ? `${fmtPrice(pc.value, unit)} per ${u.short}` : DASH),
+        fact(`Export price ${faoYear()}`, 'export', pe,
           pe ? `${fmtPrice(pe.value, unit)} per ${u.short}` : exportCause(a, i)),
-        h('dt', { text: `Exported ${state.year}` }),
+        h('dt', { text: `Exported ${faoYear()}` }),
         h('dd', { text: exportedQty == null ? DASH : massText(exportedQty, unit) })),
       h('h3', { text: `Production (${u.big})` }),
       h('div', { id: 'detail-production', class: 'chart' }),
@@ -791,10 +810,13 @@
   function render() {
     const focused = document.activeElement;
     const refocus = focused && focused.matches('button.link') ? focused.dataset.code : null;
-    const model = modelFor(state.year);
+    const model = modelFor(faoYear());
     $('year').value = state.year;
     $('year-out').textContent = state.year;
-    $('provisional').hidden = !isProvisional(state.year);
+    $('provisional').hidden = beyondFao() || !isProvisional(state.year);
+    $('year-hint').textContent = beyondFao()
+      ? `FAOSTAT has no values for ${state.year} yet. The World and country parts show ${lastYear}, its last year. The United States parts show ${state.year}.`
+      : (usYears.length ? `FAOSTAT values end in ${lastYear}. The United States has USDA values to ${lastPageYear}.` : '');
     $('official').checked = state.official;
     for (const radio of document.querySelectorAll('input[name="unit"]')) radio.checked = radio.value === state.unit;
     renderCards(model);
@@ -804,6 +826,7 @@
     renderTable(model);
     renderDetail(model);
     writeHash();
+    pageYear.set(state.year);
     if (refocus) {
       const again = document.querySelector(`button.link[data-code="${refocus}"]`);
       if (again) again.focus();
@@ -842,10 +865,13 @@
 
   // ---- Start -----------------------------------------------------------------
   readHash();
-  $('year').min = years[0];
-  $('year').max = lastYear;
+  $('year').min = firstPageYear;
+  $('year').max = lastPageYear;
   $('subtitle').textContent = `${D.meta.item.replace(/ \(.*\)$/, '')} data from ${D.meta.database}: `
-    + `production ${years[0]} to ${lastYear}, producer price ${firstPriceYear} to ${lastYear}, export price ${firstExportYear} to ${lastYear}.`;
+    + `production ${years[0]} to ${lastYear}, producer price ${firstPriceYear} to ${lastYear}, export price ${firstExportYear} to ${lastYear}.`
+    + (usYears.length ? ` United States data from USDA NASS: ${usYears[0]} to ${usYears[usYears.length - 1]}.` : '');
+  // A click on a United States chart asks for a year through the shared bus.
+  pageYear.onChange((y) => { if (y !== state.year) { state.year = y; render(); } });
   // The date of the build, and the date of the latest check for newer FAOSTAT files.
   const stamp = (date) => h('time', { datetime: date, text: date });
   const checked = (window.HONEY_STATUS || {}).checked || D.meta.retrieved;

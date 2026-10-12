@@ -206,8 +206,22 @@
     },
   };
 
+  // The year of the page is shared the same way. app.js owns the slider and sets the year;
+  // any part of the page can ask for a year (a click on a chart) and listen for a change.
+  const yearListeners = [];
+  let pageYear = null;
+  const year = {
+    get() { return pageYear; },
+    set(y) {
+      if (y === pageYear) return;
+      pageYear = y;
+      for (const fn of yearListeners) fn(y);
+    },
+    onChange(fn) { yearListeners.push(fn); },
+  };
+
   window.HONEY_UI = {
     UNITS, DASH, f0, f2, massBig, fmtMass, massText, priceIn, fmtPrice, fmtShare, pct, norm,
-    h, s, link, uid, INK, HALO, frame, hover, hash, unit,
+    h, s, link, uid, INK, HALO, frame, hover, hash, unit, year,
   };
 })();

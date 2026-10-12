@@ -34,19 +34,19 @@
       </div>
     </section>
 
-    <section class="cards" aria-label="World summary">
+    <section class="cards" aria-label="Summary of the year">
       <article class="card">
-        <h2>World production</h2>
+        <h2 id="card-production-title">World production</h2>
         <p class="big" id="card-production"></p>
         <p class="sub" id="card-production-sub"></p>
       </article>
       <article class="card">
-        <h2>World export price</h2>
+        <h2 id="card-export-title">World export price</h2>
         <p class="big" id="card-export"></p>
         <p class="sub" id="card-export-sub"></p>
       </article>
       <article class="card">
-        <h2>Producer price range</h2>
+        <h2 id="card-range-title">Producer price range</h2>
         <p class="big" id="card-range"></p>
         <p class="sub" id="card-range-sub"></p>
       </article>
@@ -96,8 +96,7 @@
 
     <section class="panel us" id="us" aria-labelledby="us-title">
       <div class="panel-head">
-        <h2 id="us-title">United States</h2>
-        <label class="search">Year <select id="us-year"></select></label>
+        <h2 id="us-title">United States <span id="us-year"></span></h2>
       </div>
       <p class="lede">USDA NASS, Honey report. These data are newer than FAOSTAT.</p>
       <p id="us-status" class="note"></p>

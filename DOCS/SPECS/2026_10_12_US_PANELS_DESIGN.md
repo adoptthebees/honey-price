@@ -44,9 +44,7 @@ The section "United States" is below the table of countries. It has 3 panels and
 
 ### Year control
 
-The section has a list of years. It is not the slider of the page, because the slider stops at the last year of FAOSTAT. The US sources have newer years.
-
-The list has the years from 2000 to the last year of the 3 sources. It starts with the last year in which all 3 sources have data. The 3 panels use this year. The address key `uy` keeps it.
+The section uses the slider of the page. The slider goes to the last year of all the sources, which is after the last year of FAOSTAT. In a year after the last year of FAOSTAT, the FAOSTAT parts of the page show the last year of FAOSTAT. They give this year in their headings. The file `PAGE_BEHAVIOR.md` gives the rule. The 3 panels use the year of the slider.
 
 ### Production and price (NASS)
 
