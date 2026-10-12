@@ -459,8 +459,12 @@ def describe(model):
     }
 
 
-def rubric():
-    """The rules of the score and of the range, for the page."""
+def rubric(usda=None):
+    """The rules of the score and of the range, for the page.
+
+    usda replaces EVIDENCE['usda'] with the revisions that scripts/build_us_data.py measured.
+    """
+    evidence = dict(EVIDENCE, usda=usda) if usda else EVIDENCE
     return {
         'base': BASE,
         'age': {kind: list(penalties) for kind, penalties in AGE_PENALTY.items()},
@@ -478,5 +482,5 @@ def rubric():
         'report': dict(REPORT_ERROR),
         'revision': {kind: list(steps) for kind, steps in REVISION.items()},
         'estimateScale': dict(ESTIMATE_SCALE),
-        'evidence': EVIDENCE,
+        'evidence': evidence,
     }
