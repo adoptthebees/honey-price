@@ -63,7 +63,7 @@ A whole number that does not end in zero has the rounding part 0.5 divided by th
 
 The script multiplies K by the series scale, the class multiplier and the estimate multiplier. The result is the estimate error. The script limits it to the natural logarithm of 3 before it adds it to the sum of squares.
 
-K is the 90th percentile of the misses of the official values of all countries, each divided by its scale. The script finds the scale of each miss without that miss. Thus a value does not help to make the scale that tests it.
+K is the 90th percentile of the misses of the official values of all countries, each divided by its scale. The script finds the scale of each miss without that miss. Thus a value does not help to make the scale that tests it. A series without a series scale uses the pooled scale for its misses.
 
 A normal curve gives K = 1.645. The data give a larger K for each type, because the misses have long tails.
 
@@ -79,7 +79,7 @@ The script divides the countries into 3 groups that have the same number of coun
 
 The class multiplier is 1 or more. It makes the range larger for a flag when the values of that flag have a larger miss than official values. The script divides each miss by the series scale. It then divides the spread of these numbers for the flag by the spread for the official values.
 
-The script makes the multiplier only when 20 values or more of the flag have a miss with 2 official neighbors. If not, the multiplier is 1.
+The script makes the multiplier only when 20 values or more of the flag have a miss with 2 official neighbors. If not, the multiplier is 1. A flag that is not E, I, X or B has the multiplier 1.
 
 ## Totals
 
@@ -89,7 +89,9 @@ For the World production, the script uses each country that has a value in the y
 
 The script uses this part as an estimated value. Its half width is the mean half width of the non-official country values, with the value as weight. Its score is 60 minus the age penalty.
 
-The script multiplies the value of each part by the exponential of its half width, minus 1. It finds the square root of the sum of the squares of these numbers. The half width of the total is the logarithm of 1 plus this root divided by the total. The score of the total is the mean of the scores of the parts. Each part has a weight that is equal to its value.
+The script multiplies the value of each part by the exponential of its half width, minus 1. It finds the square root of the sum of the squares of these numbers. The half width of the total is the logarithm of 1 plus this root divided by the total.
+
+The score of the total is the mean of the scores of the parts. Each part has a weight that is equal to its value. The script makes the mean a whole number. A half goes up.
 
 For the World export price, the script uses the countries that have an export price. The weight of each country is its export value. The script then uses the same square root and the same mean.
 
@@ -118,7 +120,7 @@ For the last year, the year before and the year before that, the script subtract
 
 ### Penalties in proportion
 
-The 6 other penalties are in proportion to the measure of a problem. A measure is zero when the value has no problem. The script multiplies the most penalty by the measure and divides the result by the full measure. It makes this a whole number. The penalty is not more than the most penalty.
+The 6 other penalties are in proportion to the measure of a problem. A measure is zero when the value has no problem. The script multiplies the most penalty by the measure and divides the result by the full measure. It makes the result a whole number. A half goes up. The penalty is not more than the most penalty.
 
 A penalty is not zero for a small problem. Thus a small problem has a small penalty, and different values have different scores.
 
@@ -189,19 +191,19 @@ The neighbor range of a value is the mean of the logarithms of its 2 neighbors, 
 
 For each official value that has 2 official neighbors, the script finds the scale without the miss of this value. It then divides the miss by the scale. The script divides the countries into 2 groups by the parity of the area code. It finds K with one group and tests K with the other group. It does the test 2 times, and each group is the test group 1 time.
 
-The data of 2026-10-10 give these results. The table gives the share of the official values that the neighbor range held.
+The data of 2026-10-12 give these results. The table gives the share of the official values that the neighbor range held.
 
 | Type | K | Held share | Values |
 | --- | --- | --- | --- |
-| Production | 2.457 | 90.2% | 3,686 |
-| Producer price | 2.048 | 90.0% | 1,534 |
-| Export price | 1.995 | 90.3% | 2,323 |
+| Production | 2.456 | 90.2% | 3,723 |
+| Producer price | 2.045 | 90.1% | 1,561 |
+| Export price | 1.995 | 90.2% | 2,353 |
 
 This test measures the estimate error with official values only. It does not show how far an FAO estimate is from the correct value.
 
 ### Class multipliers
 
-The data of 2026-10-10 give these class multipliers. Only a value with 2 official neighbors can set a multiplier. Only 42 of the 3,199 non-official production values (1.3%) have 2 official neighbors.
+The data of 2026-10-12 give these class multipliers. Only a value with 2 official neighbors can set a multiplier. Only 41 of the 3,199 non-official production values (1.3%) have 2 official neighbors.
 
 | Type | Flag | Multiplier | Values that set it |
 | --- | --- | --- | --- |
@@ -228,7 +230,7 @@ Only 3 of the values are for the last year of a previous version. For these 3 va
 
 ### Score test
 
-The test counts the different scores of the official values of the last year. The previous rules gave 3, 2 and 3 different scores to these values. One score was on 94%, 93% and 85% of them. The data of 2026-10-11 give these results with the new rules.
+The test counts the different scores of the official values of the last year. The previous rules gave 3, 2 and 3 different scores to these values. One score was on 94%, 93% and 85% of them. The data of 2026-10-12 give these results with the new rules.
 
 | Type | Values | Different scores | Largest share with the same score |
 | --- | --- | --- | --- |
@@ -236,7 +238,7 @@ The test counts the different scores of the official values of the last year. Th
 | Producer price | 44 | 12 | 20% |
 | Export price | 55 | 19 | 22% |
 
-The test also counts the values that have a range of more than 20% on each side and a score of 80 or more. The previous rules gave 117 of the 12,523 values this score and this range. The new rules give them to 1 value. The rounding penalty causes this change.
+The test also counts the values that have a range of more than 20% on each side and a score of 80 or more. The previous rules gave 117 of the 12,523 values this score and this range. The new rules give them to 3 values. The rounding penalty causes this change.
 
 ## Limits
 
@@ -250,7 +252,7 @@ The class multipliers use a small number of values. The score puts an estimated 
 
 The revision test uses the new official value as the correct value. This value can have an error too. The tool does not measure a confidence interval.
 
-The age penalty and the jump penalty lower the score of the last year. In the data of 2026-10-11, only 3 of the 50 official production values of 2024 have a score of 80 or more. Thus a small number of values of the last 3 years have the level "high".
+The age penalty and the jump penalty lower the score of the last year. In the data of 2026-10-12, only 3 of the 50 official production values of 2024 have a score of 80 or more. Thus a small number of values of the last 3 years have the level "high".
 
 ## References
 

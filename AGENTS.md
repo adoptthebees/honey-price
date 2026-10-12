@@ -133,6 +133,7 @@ These words are technical nouns for the data:
 - two
 - minute
 - second
+- pixel
 
 These words are technical nouns for the statistics:
 
@@ -223,6 +224,11 @@ These words are technical nouns for the software:
 - panel
 - mouse
 - label
+- runner
+- dump
+- secret
+- variable
+- fixture
 - link
 - key
 - list
@@ -335,6 +341,8 @@ These words are technical nouns for the market data system:
 - SQL
 - statement
 - unique index
+- variety
+- certification
 
 These words are technical nouns for the trade data:
 
@@ -356,6 +364,8 @@ These words are technical nouns for the trade data:
 - tariff
 - stock
 - yield
+- air
+- vessel
 
 These words are names:
 
@@ -415,7 +425,7 @@ Add the option `--vocabulary` to examine each word against the dictionary. The s
 
 The script examines only files that have `.md` at the end of the name. It does not examine how you use a word. Use each word only as the dictionary gives it (Rules 1.2 and 1.3).
 
-The workflow `Checks` starts the script with the option `--vocabulary` on each push and each pull request.
+The workflow `Checks` starts the script with the option `--vocabulary` on each push to the branch `main` and on each pull request.
 
 ## Complete a task
 

@@ -26,7 +26,7 @@ The page shows production, producer price and export price. The script uses the 
 
 The script gets 3 zip files from the FAOSTAT download server. The names are `Production_Crops_Livestock_E_All_Data_(Normalized).zip`, `Prices_E_All_Data_(Normalized).zip` and `Trade_CropsLivestock_E_All_Data_(Normalized).zip`.
 
-The trade file has approximately 270 MB. The script keeps the files in a cache directory. It downloads a file again only when the `Last-Modified` value of the file changes.
+The trade file has approximately 270 MB. The script keeps the files in a cache directory. It downloads a file again only when the `Last-Modified` value of the file changes. The script stops when a downloaded file is not complete or is not a zip file. It then keeps no copy of that file.
 
 ## Selection rules
 
@@ -36,7 +36,7 @@ The trade file has approximately 270 MB. The script keeps the files in a cache d
 - The script removes the group China (code 351). It is the sum of "China, mainland" and "China, Taiwan Province of". The script keeps the 2 parts.
 - The script stops with an error when the group China has producer prices, because it can remove data.
 - The script removes each area with the word "excluding" in its name. These areas are groups too.
-- The script removes each area without a value in the series of the table above.
+- The script removes each area without a value in production, producer price, export quantity and export value.
 - The World row (code 5000) has the World totals: the World production and the World exports. FAOSTAT has no World producer price.
 
 ## Flags
@@ -50,7 +50,8 @@ Each value has one flag letter from FAO. A space in a flag string shows that the
 | I | "Value imputed by a receiving agency" | imputed |
 | X | "Figure from external organization" or "Value from external organization" | external |
 | B | "Time series break" (producer price only) | series break |
-| M | "Missing value; data cannot exist" | none |
+
+FAO gives the flag M ("Missing value; data cannot exist") to a year without a value. The script makes this year a year without a value. Thus the data file has no flag M.
 
 A non-official value is a value with a flag other than A. The switch "Official values only" keeps only the values with the flag A.
 
@@ -58,7 +59,7 @@ A non-official value is a value with a flag other than A. The switch "Official v
 
 The script divides the export value by the export quantity and multiplies the result by 1000. The result is in US dollars for each tonne. It is a customs average. It has all grades of honey. It also has exports of honey that the country got from other countries.
 
-To make an export price, the script must have an export quantity and an export value. Its flag is A only when the 2 flags are A. If not, the flag is the first of I, E and X that one of the 2 flags has.
+To make an export price, the script must have an export quantity and an export value. Its flag is A only when the 2 flags are A. If not, the flag is the first of I, E and X that one of the 2 flags has. When the 2 flags have none of these letters, the flag is the first of the 2 flags that is not A.
 
 A country has an export price only for a year with an export quantity of 100 tonnes or more. The World row has no such limit. An export price from a small export quantity has much noise. The script measures this noise and keeps the result in `meta.exportCheck`.
 
@@ -95,8 +96,8 @@ The World row has no price arrays and no penalty arrays. Its scores and ranges c
 | `sources` | For each FAOSTAT file: the data set, the title, the element, the links, the file name and `lastModified` |
 | `flags` | The flag letters that the data use, with the text of FAO for each letter |
 | `minExportTonnes` | The export limit for the export price of a country |
-| `exportCheck` | The test of the export limit. It has the share of country years with an export price of more than 6.00 or less than 0.40 US dollars for each lb. It also has the share of the tonnage above the limit in the last year. |
-| `worldExportGaps` | The years in which the World export quantity is more than 1% different from the sum of the countries |
+| `exportCheck` | The test of the export limit. For each year from 2010, the script finds the share of the country years with an export quantity below the limit that have an export price of more than 6.00 or less than 0.40 US dollars for each lb. The key `smallOutside` has the smallest and the largest of these shares. The key `largeOutside` has the same share for all country years from the limit up, in one number. The key `aboveShare` has the share of the tonnage of the last year that comes from the countries at or above the limit. |
+| `worldExportGaps` | The years in which the difference between the World export quantity and the sum of the countries is more than 1% of this sum |
 | `uncertainty` | The numbers that the script finds from the data, and the rules of the score and the range |
 
 The page writes `exportCheck` and `worldExportGaps` in its text. Thus the text follows the data after each update.
@@ -109,11 +110,15 @@ The file `data/honey_status.js` sets `window.HONEY_STATUS`. The value is `{"chec
 
 The script stops with an error in these conditions:
 
+- A downloaded file is not complete, or is not a zip file.
 - A file has no honey row.
+- A file has 2 rows for one area and one year.
 - A flag has more than one letter.
+- A value has no flag.
+- A flag letter is not in the flags file of the data set.
 - The group China has producer prices.
 
-The script gives a note when the World export quantity is more than 1% different from the sum of the countries.
+The script compares the World export quantity with the sum of the countries. It gives a note when the difference is more than 1% of the sum.
 
 ## Limits of the data
 
@@ -121,7 +126,7 @@ FAOSTAT has no retail price and no wholesale price. All prices are in US dollars
 
 A country can have a value in the first years and no value in the last years. FAO includes it in the World total. The page shows the share of the World total that the country rows have.
 
-The World total of the exports can be different from the sum of the countries. The data of 2026-10-10 show this for the year 2013.
+The World total of the exports can be different from the sum of the countries. The data of 2026-10-12 show this for the year 2013.
 
 The production file can have a date before the date of the price file. The page shows the date of each file.
 

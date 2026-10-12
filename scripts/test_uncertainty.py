@@ -299,6 +299,11 @@ class RangeTests(unittest.TestCase):
         self.assertLess(official, estimated)
         self.assertLessEqual(estimated, imputed)
 
+    def test_a_flag_that_the_model_does_not_know_gets_the_estimate_error_too(self):
+        # A new FAO flag is a non-official value. Its range is wider than an official one.
+        official, unknown = (self.band(flag * YEARS)[10] for flag in 'AT')
+        self.assertGreater(unknown, official)
+
     def test_an_official_value_has_a_range_of_each_kind(self):
         for kind in ('production', 'price', 'export'):
             self.assertTrue(all(b > 0 for b in self.band('A' * YEARS, kind)), kind)
@@ -341,6 +346,22 @@ class CalibrationTests(unittest.TestCase):
         self.assertTrue(0.8 <= model['calibration']['coverage'] <= 1.0)
         self.assertGreater(model['calibration']['n'], 100)
         self.assertEqual(set(model['fclass']), set(u.MODEL_FLAGS))
+
+    def test_k_counts_the_official_misses_of_a_country_without_a_scale_of_its_own(self):
+        # A country with 6 official values in a row has 4 misses: too few for a scale of its own.
+        # Its misses still count for K, standardized with the pooled scale.
+        series = synthetic_countries()
+        short = wavy(500, 0.9)[:8]
+        series[99] = (short[:1] + [None] + short[1:7], 'A ' + 'A' * 6)
+        with_short, without = u.fit(series), u.fit(synthetic_countries())
+        self.assertEqual(with_short['calibration']['n'], without['calibration']['n'] + 4)
+        self.assertEqual(with_short['calibration']['countries'], without['calibration']['countries'] + 1)
+
+    def test_a_fit_without_a_series_that_has_a_scale_stops_with_a_message(self):
+        with self.assertRaisesRegex(ValueError, 'official'):
+            u.fit({})
+        with self.assertRaisesRegex(ValueError, 'official'):
+            u.fit({1: ([None, 100.0, None], ' A ')})
 
     def test_k1_holds_about_ninety_percent_of_the_official_steps(self):
         series = synthetic_countries()
@@ -414,6 +435,10 @@ class TotalTests(unittest.TestCase):
     def test_score_stays_in_the_documented_bounds(self):
         self.assertEqual(u.aggregate_conf([1.0, 1.0], [200, 200]), u.MAX_SCORE)
         self.assertEqual(u.aggregate_conf([1.0, 1.0], [0, 0]), u.MIN_SCORE)
+
+    def test_a_half_rounds_up_as_the_points_of_a_check_do(self):
+        self.assertEqual(u.aggregate_conf([1.0, 1.0], [62, 63]), 63)
+        self.assertEqual(u.aggregate_conf([1.0, 1.0], [63, 64]), 64)
 
     def test_a_part_without_a_country_row_makes_the_total_less_certain(self):
         # (value, score, half width, official). In the first total 100 t has no country row.

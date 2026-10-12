@@ -14,7 +14,7 @@ The year control is a slider. It goes from the first year to the last year of th
 
 The unit control has 3 values: pound, kilogram and tonne. The page shows production in units of 1,000,000 pounds, 1,000,000 kilograms or tonnes. It shows prices in US dollars for each pound, kilogram or tonne. A price in tonnes has no decimal part.
 
-The page writes a production of zero as 0. It writes a small production with more digits. Thus a small value is not 0. It shows an export quantity of less than 1,000,000 pounds or 1,000,000 kilograms in pounds or kilograms.
+The page writes a production of zero as 0 and a share of zero as 0%. It writes a small production with more decimals. Thus a value that is not zero does not show as 0. It shows an export quantity of less than 1,000,000 pounds or 1,000,000 kilograms in pounds or kilograms.
 
 The switch "Official values only" removes each country value that does not have the flag A. The World totals stay on the page, because the script makes them from the countries. The shares in the table use the full World total.
 
@@ -49,13 +49,13 @@ The panel also has a chart. Each bar of the chart is one year. The bar shows the
 
 ## Charts
 
-The page has 2 charts for the World: production and export price. The country panel has 3 charts for one country: production, producer price and export price. Each chart has a point for each year with a value. The x axis has all the years. The y axis starts at zero.
+The page has 2 charts for the World: production and export price. The country panel has 3 charts for one country: production, producer price and export price. Each chart has a point for each year with a value. The x axis has all the years, with a label each 10 years and a mark each 5 years. The y axis starts at zero.
 
 The shape of a point shows the flag. An official value has a solid circle. An estimated value has an open circle. An imputed value has a diamond. An external value has a solid square, and a series break has an open square. A point is lighter when its score is lower.
 
 Each point has a bar for its range. A band connects the ranges of each sequence of years. A strip below the chart has one mark for each year, with the color of the level of the score. A click on a chart selects the year.
 
-The chart shows the last 3 years in a different color, because FAO and the countries can change them. When you move the mouse above a chart, the page shows a message. The message has the year, the value, the source, the range and the score. It also has a note when the year is "provisional". Below these, the message gives the score at the start and each penalty of the score.
+The chart shows the last 3 years with a different color and a line at their start. The word "provisional" is above them, because FAO and the countries can change these years. When you move the mouse above a chart, the page shows a message. The message has the year, the value, the source, the range and the score. It also has a note when the year is "provisional". Below these, the message gives the score at the start and each penalty of the score.
 
 ## Table
 
@@ -65,11 +65,13 @@ A click on a heading sorts the table. A click on the same heading again changes 
 
 The note below the table gives the number of rows and the number of countries that have a price. It gives the share of the World total that the rows have. It also gives the text for each letter.
 
+When the page has a width of 600 pixels or less, the table does not show the number and the share. The circle with the score stays.
+
 ## Country panel
 
 The country panel shows one country. It gives the production, the share of the World total, the producer price, the export price and the export quantity for the selected year. Each value has its score and its range. The panel has the 3 charts of the country. The button "Clear" closes the panel.
 
-A country with an export quantity of less than 100 tonnes has no export price. The panel shows the export quantity and gives the cause.
+A country with an export quantity of less than 100 tonnes has no export price. The panel shows the export quantity and gives the cause. The switch "Official values only" can remove the export values of the year. Then the panel shows no export quantity and gives this cause.
 
 ## Text that follows the data
 
