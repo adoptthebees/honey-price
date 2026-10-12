@@ -45,6 +45,7 @@ CHINA_GROUP = '351'
 GROUP_WORD = 'excluding'
 KG_PER_LB = 0.45359237  # exact: the international pound
 STATUS_NAME = 'honey_status.js'  # next to the data file; holds the date of the latest check
+US_SUPPLY_NAME = 'us_supply.js'  # next to the data file; scripts/build_us_data.py writes it
 # FAO marks a year in which the value cannot exist with this flag. The row has no value.
 MISSING_FLAG = 'M'
 # The page quotes how far to trust the unit value of a small export. This is the test behind it.
@@ -377,7 +378,19 @@ def score_areas(areas, world, years, imports):
     return models
 
 
-def build(cache_dir, refresh, day):
+def usda_evidence(path):
+    """The revisions of the USDA from data/us_supply.js, or the typed numbers in uncertainty.EVIDENCE.
+
+    scripts/build_us_data.py measures them from the NASS reports. The page shows them with 3 decimals.
+    """
+    supply = read_script(path, 'HONEY_US_SUPPLY') or {}
+    found = supply.get('evidence') or {}
+    if not all(key in found for key in ('years', 'production', 'price')):
+        return uncertainty.EVIDENCE['usda']
+    return {'years': found['years'], 'production': round(found['production'], 3), 'price': round(found['price'], 3)}
+
+
+def build(cache_dir, refresh, day, usda=None):
     tables = {name: {} for name in TABLES + CHECK_TABLES}  # name -> area code -> {year: (value, flag)}
     names, files, flag_text = {}, {}, {}
     for key, source in SOURCES.items():
@@ -467,7 +480,7 @@ def build(cache_dir, refresh, day):
             'worldExportGaps': gaps,
             'uncertainty': {
                 'models': {kind: uncertainty.describe(model) for kind, model in models.items()},
-                'rubric': uncertainty.rubric(),
+                'rubric': uncertainty.rubric(usda),
             },
         },
         'years': years,
@@ -506,7 +519,7 @@ def main():
         return
 
     os.makedirs(args.cache, exist_ok=True)
-    data = build(args.cache, args.refresh, day)
+    data = build(args.cache, args.refresh, day, usda_evidence(os.path.join(folder, US_SUPPLY_NAME)))
     write(data, args.out)
     write_status(folder, day)
 

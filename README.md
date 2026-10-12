@@ -1,6 +1,6 @@
 # Honey price and production
 
-This tool shows data about honey. It shows the production, the producer price and the export price of honey for each country. All data come from FAOSTAT, the statistics database of the Food and Agriculture Organization of the United Nations (FAO).
+This tool shows data about honey. It shows the production, the producer price and the export price of honey for each country. These data come from FAOSTAT, the statistics database of the Food and Agriculture Organization of the United Nations (FAO). The tool also shows the production, the price, the colonies and the stocks of the United States for each state. These data come from the reports of NASS, a part of the USDA. They are newer than the FAOSTAT data.
 
 ## Use
 
@@ -10,7 +10,7 @@ Each value has a confidence score and a range. The page has text that tells how 
 
 ## Update the data
 
-A GitHub workflow looks for newer FAOSTAT files each week. When it finds them, it makes the data file again and saves it in the repository. It also saves the status date. To make the data file on your computer, use `python3 scripts/build_data.py`. The file `DOCS/SPECS/DATA_UPDATE.md` gives more information.
+A GitHub workflow looks for newer FAOSTAT files each week. When it finds them, it makes the data file again and saves it in the repository. It also saves the status date. To make the data file on your computer, use `python3 scripts/build_data.py`. A second workflow does the same for the reports of NASS with `python3 scripts/build_us_data.py`. The file `DOCS/SPECS/DATA_UPDATE.md` gives more information.
 
 ## Tests
 
@@ -33,4 +33,4 @@ To examine the documents, use `python3 scripts/check_docs.py`. Add the option `-
 
 ## License
 
-The data are from FAOSTAT and have the license `CC BY 4.0`. FAO shows that the trade data can have more limits from UNSD and Eurostat.
+The data are from FAOSTAT and have the license `CC BY 4.0`. FAO shows that the trade data can have more limits from UNSD and Eurostat. The data of NASS are in the public domain.

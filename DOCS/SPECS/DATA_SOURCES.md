@@ -130,6 +130,42 @@ The World total of the exports can be different from the sum of the countries. T
 
 The production file can have a date before the date of the price file. The page shows the date of each file.
 
+## United States data
+
+The page also shows data of the United States from the USDA. They are newer than the FAOSTAT data. The source is the publication "Honey" of NASS. NASS gives one report each year, in March. The report has the values of the last year and the values of the year before, which NASS can change. The publication "Honey - Final Estimates" of 2019 changes the years 2013 to 2017.
+
+The reports are on ESMIS, the publication server of the USDA. The script `scripts/build_us_data.py` gets the list of the reports from ESMIS and downloads each report that has a zip file. The reports from 2002 have a zip file. They give the years from 2000. The data are in the public domain.
+
+### Values
+
+Each report has one table for each year. A row of the table is one state, "Other States" or "United States". The columns are the colonies, the yield, the production, the stocks on 15 December, the average price and the value of production. The script reads the table by its title.
+
+The report gives the colonies in 1,000 colonies and the yield in pounds for each colony. It gives the production and the stocks in 1,000 pounds. It gives the price in cents or US dollars for each pound, and the value in 1,000 US dollars. The script writes the values in colonies, pounds, US dollars for each pound and US dollars.
+
+A value that NASS does not give is null. The script stops with an error when a state name is not in its list, or when a report has no table of this type.
+
+For each state and year, the data file keeps the values of the newest report that has them. For the United States, it also keeps the first estimate of each year and the second estimate. The first estimate is in the first report that has the year. The second estimate is in the next report that has the year.
+
+### The file `us_supply.js`
+
+The file `data/us_supply.js` sets `window.HONEY_US_SUPPLY`. The value is one JSON object with these keys.
+
+| Key | Content |
+| --- | --- |
+| `meta` | The names of the USDA and NASS, the source, the links, the date of the update and the date of the newest report |
+| `reports` | The reports, in sequence of date. Each has the date, the publication and the link. |
+| `years` | The years, from 2000 to the last year |
+| `geos` | The areas. The United States comes first. The states come next. "Other States" is the last area. Each has a code, a name and a level. |
+| `rows` | One array for each area and year: the area, the year and the report as positions in the lists above, then the colonies, the yield, the production, the stocks, the price and the value |
+| `us` | One array for each year of the United States: the year, then the report, the production and the price of the first estimate, then the same 3 values of the second estimate. When one report only has the year, the second estimate has 3 null values. |
+| `evidence` | The revisions of the USDA. The file `CONFIDENCE_METHOD.md` uses them. |
+
+The key `evidence` has the years, the production revision and the price revision. For each year from 2017, the script divides the second estimate by the first estimate. It finds the natural logarithm of the result, without its sign. The revision is the largest of these numbers.
+
+The script `scripts/build_data.py` reads the 2 revisions from this file. It keeps them in `meta.uncertainty.rubric.evidence.usda`. When the file is not there, it uses the typed numbers in `scripts/uncertainty.py`.
+
+The file `data/us_status.js` sets `window.HONEY_US_STATUS`. The value is `{"checked": "YYYY-MM-DD"}`. It has the date on which the script last examined ESMIS for a newer report.
+
 ## References
 
 - `CONFIDENCE_METHOD.md` is the specification of the score and the range.

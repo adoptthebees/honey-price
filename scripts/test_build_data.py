@@ -2,6 +2,7 @@
 import csv
 import http.server
 import io
+import json
 import math
 import os
 import sys
@@ -78,6 +79,32 @@ class ScriptFileTests(unittest.TestCase):
             b.write_status(folder, '2026-10-24')
             status = b.read_script(os.path.join(folder, b.STATUS_NAME), 'HONEY_STATUS')
             self.assertEqual(status, {'checked': '2026-10-24'})
+
+
+class UsdaEvidenceTests(unittest.TestCase):
+    """The revisions of the USDA come from data/us_supply.js when it is there."""
+
+    def supply(self, folder, evidence):
+        path = os.path.join(folder, 'us_supply.js')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('/* test */\nwindow.HONEY_US_SUPPLY = ' + json.dumps({'evidence': evidence, 'years': [2024]}) + ';\n')
+        return path
+
+    def test_the_measured_revisions_replace_the_typed_ones(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.supply(folder, {'years': '2017 to 2024', 'production': 0.0108, 'price': 0.1099})
+            self.assertEqual(b.usda_evidence(path), {'years': '2017 to 2024', 'production': 0.011, 'price': 0.11})
+
+    def test_a_missing_or_incomplete_file_gives_the_typed_numbers(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(b.usda_evidence(os.path.join(folder, 'none.js')), u.EVIDENCE['usda'])
+            path = self.supply(folder, {'years': '2017 to 2024'})
+            self.assertEqual(b.usda_evidence(path), u.EVIDENCE['usda'])
+
+    def test_the_rubric_carries_the_given_revisions(self):
+        usda = {'years': '2017 to 2025', 'production': 0.02, 'price': 0.15}
+        self.assertEqual(u.rubric(usda)['evidence']['usda'], usda)
+        self.assertEqual(u.rubric()['evidence']['usda'], u.EVIDENCE['usda'])
 
 
 def area(quantity, value, flags=None):

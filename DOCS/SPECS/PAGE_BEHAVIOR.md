@@ -6,7 +6,9 @@ This document is the specification of the page. The page shows the FAOSTAT data 
 
 ## Files
 
-The file `index.html` has the structure and the text of the page. The file `styles.css` has the style. The file `app.js` makes the page work. The files `data/honey_data.js` and `data/honey_status.js` have the data. The file `DATA_SOURCES.md` is the specification of these files.
+The file `index.html` has the structure and the text of the page. The file `styles.css` has the style. The file `ui.js` has the functions that the other scripts share: the units, the formats of numbers, the charts and the address. The file `app.js` makes the FAOSTAT part of the page work. The file `us.js` makes the section "United States" work.
+
+The files `data/honey_data.js`, `data/honey_status.js`, `data/us_supply.js` and `data/us_status.js` have the data. The file `DATA_SOURCES.md` is the specification of these files.
 
 ## Controls
 
@@ -30,6 +32,7 @@ The page keeps the year, the unit and the other selections in the part of the ad
 | `u` | The unit: `lb`, `kg` or `tonne` |
 | `a` | The area code of the country in the country panel |
 | `o` | The value 1 when the switch "Official values only" is on |
+| `uy` | The year of the section "United States" |
 
 For example, `#y=2023&u=lb&a=183&o=1` opens the page for the year 2023, in pounds, with Romania in the country panel, and with official values only. A key with an incorrect value does not change the selection.
 
@@ -72,6 +75,34 @@ When the page has a width of 600 pixels or less, the table does not show the num
 The country panel shows one country. It gives the production, the share of the World total, the producer price, the export price and the export quantity for the selected year. Each value has its score and its range. The panel has the 3 charts of the country. The button "Clear" closes the panel.
 
 A country with an export quantity of less than 100 tonnes has no export price. The panel shows the export quantity and gives the cause. The switch "Official values only" can remove the export values of the year. Then the panel shows no export quantity and gives this cause.
+
+## Section "United States"
+
+The section "United States" is below the table of the countries. It shows the data of NASS for the United States: the production, the price, the colonies, the yield, the stocks and the value. The file `DATA_SOURCES.md` gives the source. The text below the title tells that the data come from NASS and are newer than the FAOSTAT data. The section also shows the date on which the script last examined ESMIS.
+
+The page gets the file `data/us_supply.js` when the section comes into view. Before that, the section shows the text "Loading". When the file does not come, the section shows a message with the name of the file. The other parts of the page work.
+
+### Year of the section
+
+The section has a list of years. It is not the slider of the page, because the slider stops at the last year of FAOSTAT. The list has each year that has a value for the United States. The page selects the last of them. The address key `uy` keeps the year. A year that is not in the list does not change the selection.
+
+### Facts
+
+A line gives the values of the United States for the selected year. These are the production, the colonies, the yield, the average price, the value, the stocks on 15 December and the date of the report. When the first estimate of the year is different from the last value, the line also gives the first estimate. It gives the date of its report. The unit control of the page changes the units of the section.
+
+### Charts
+
+The section has 2 charts: the production and the average price of the United States for each year. The last value of a year has a solid circle. When the first estimate of the year is different, it has an open circle, and a line connects the 2 circles. A line connects the last values. The selected year has a mark.
+
+The message of a chart gives the year, the value, the date of the report and the first estimate. A click on a chart selects the year.
+
+### Table
+
+The table shows the states for the selected year. The columns are the state, the colonies, the yield, the production, the stocks, the price and the value. The row "Other States" is the last row. The last line of the table has the values of the United States. A click on a heading sorts the table, as in the table of the countries. A value that NASS does not give shows the symbol "—".
+
+The line below the table gives the source and the date of the report. It also tells that the values come from the newest report that has the year. When the selected year has no value for the United States, the section shows the text "No data for this year". It gives the first year and the last year of the data.
+
+When the page has a width of 600 pixels or less, the table does not show the stocks and the value.
 
 ## Text that follows the data
 

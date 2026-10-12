@@ -134,6 +134,8 @@ These words are technical nouns for the data:
 - minute
 - second
 - pixel
+- cent
+- public domain
 
 These words are technical nouns for the statistics:
 
@@ -389,6 +391,9 @@ These words are names:
 - Federal Register
 - AMS
 - NASS
+- ESMIS
+- March
+- December
 - ERS
 - IBGE
 - USITC

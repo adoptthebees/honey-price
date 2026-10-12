@@ -88,9 +88,21 @@
       <aside class="panel" id="detail"></aside>
     </div>
 
+    <section class="panel us" id="us" aria-labelledby="us-title">
+      <div class="panel-head">
+        <h2 id="us-title">United States</h2>
+        <label class="search">Year <select id="us-year"></select></label>
+      </div>
+      <p class="lede">USDA NASS, Honey report. These data are newer than FAOSTAT.</p>
+      <p id="us-status" class="note"></p>
+      <div id="us-body">
+        <p class="note">Loading…</p>
+      </div>
+    </section>
+
     <section class="panel sources" id="sources">
       <h2>Where the numbers come from</h2>
-      <p>All values come from <a href="https://www.fao.org/faostat/en/#home" target="_blank" rel="noopener noreferrer">FAOSTAT</a>, the statistics database of the UN Food and Agriculture Organization (FAO). FAOSTAT does not count honey itself. It collects values from national authorities. The quotes below are FAO's own descriptions.</p>
+      <p>The values of the countries and the World come from <a href="https://www.fao.org/faostat/en/#home" target="_blank" rel="noopener noreferrer">FAOSTAT</a>, the statistics database of the UN Food and Agriculture Organization (FAO). FAOSTAT does not count honey itself. It collects values from national authorities. The quotes below are FAO's own descriptions. The section "United States" comes from the Honey reports of <a href="https://esmis.nal.usda.gov/publication/honey" target="_blank" rel="noopener noreferrer">USDA NASS</a>; its source line gives the report.</p>
 
       <h3>Production</h3>
       <blockquote>“The main data source is official statistics from FAO member countries. The source data can originate from surveys, administrative data and estimates based on expert observations. … If no data from either official or unofficial sources is available, data are imputed. In all cases, data are flagged accordingly.”<br>“Aggregates are the sum of available data. Aggregates include estimated data.”</blockquote>
@@ -146,6 +158,9 @@
   <noscript><p class="error">This page needs JavaScript.</p></noscript>
   <script src="data/honey_data.js"></script>
   <script src="data/honey_status.js"></script>
+  <script src="data/us_status.js"></script>
+  <script src="ui.js"></script>
   <script src="app.js"></script>
+  <script src="us.js"></script>
 </body>
 </html>
