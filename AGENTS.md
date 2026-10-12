@@ -133,6 +133,7 @@ These words are technical nouns for the data:
 - two
 - minute
 - second
+- pixel
 
 These words are technical nouns for the statistics:
 
@@ -424,7 +425,7 @@ Add the option `--vocabulary` to examine each word against the dictionary. The s
 
 The script examines only files that have `.md` at the end of the name. It does not examine how you use a word. Use each word only as the dictionary gives it (Rules 1.2 and 1.3).
 
-The workflow `Checks` starts the script with the option `--vocabulary` on each push and each pull request.
+The workflow `Checks` starts the script with the option `--vocabulary` on each push to the branch `main` and on each pull request.
 
 ## Complete a task
 

@@ -8,7 +8,7 @@ This document is the specification of the update of the data file. A GitHub work
 
 - The script `scripts/build_data.py` makes the data file `data/honey_data.js` and the status file `data/honey_status.js`.
 - The workflow `.github/workflows/update-data.yml` starts the script each week and saves the result in the repository.
-- The workflow `.github/workflows/checks.yml` does the tests and examines the documents on each push and each pull request.
+- The workflow `.github/workflows/checks.yml` does the tests and examines the documents on each push to the branch `main` and on each pull request.
 
 The page reads the 2 data files.
 
@@ -26,7 +26,7 @@ When the 3 values are the same as in the data file, the script writes only the s
 
 - A value is different.
 - FAOSTAT sends no value.
-- There is no data file, or the data file is not complete.
+- There is no data file, or the data file is not complete. The data file is complete when it has the years, the World row and the areas.
 
 A change of a script does not change the 3 values. After a change of a script, make the data again without the option `--if-changed`.
 
@@ -69,7 +69,13 @@ To start the script on your computer, use `python3 scripts/build_data.py --if-ch
 
 ## Failure
 
-The workflow stops with an error when the script gives an error, when a test gives an error, or when a file does not download. The workflow then saves no change. GitHub sends a message about the failure. The page keeps the last good data.
+The workflow stops with an error in these conditions:
+
+- The script gives an error.
+- A test gives an error.
+- A file does not download in full.
+
+The workflow then saves no change. GitHub sends a message about the failure. The page keeps the last good data.
 
 When the workflow stops with an error, the status date on the page does not change. A status date that is more than 1 week before the date on which you look at the page shows a problem.
 

@@ -42,7 +42,7 @@ The script uses the cache of `scripts/build_data.py` for the new version. This i
 
 ## Method
 
-The script makes the ranges with the countries of one previous version only. It then compares each range with the value of the same country and year in the new version. The script divides the new value by the previous value. The miss is the logarithm of the result.
+The script makes the ranges with the countries of one previous version only. It then compares each range with the value of the same country and year in the new version. The script uses a value only when it is more than zero in the 2 versions. The script divides the new value by the previous value. The miss is the logarithm of the result.
 
 The range holds the new value when the miss is not more than the half width above or below zero. The age of a value is the number of years between its year and the last year of the previous version. The script gives the results for the age 0, 1 and 2, and for an age of 3 or more.
 
@@ -50,11 +50,11 @@ The script makes 3 groups of values:
 
 1. Official values. The 2 versions have an official value.
 2. Estimates. The previous version has an estimated value, an imputed value or an external value. The new version has an official value.
-3. World totals. The script makes the World total from the countries of the previous version. It compares the range of this total with the World total that FAO gives in the new version.
+3. World totals. The script makes the range of the World total from the countries of the previous version. The range is around the World total that FAO gives in the previous version. The script compares the range with the World total that FAO gives in the new version.
 
 ## Results
 
-The date of the test is 2026-10-11. The script gives the numbers below.
+The date of the test is 2026-10-12. The script gives the numbers below.
 
 ### Official values
 
@@ -86,11 +86,11 @@ There are 110 values that are estimates in a previous version and official value
 | 2023-12 | 91.9% | 37 |
 | 2025-02 | 79.3% | 29 |
 
-For a held share of 90%, the multiplier must be 2.47 for all 110 values. It must be 4.07 for the 25 estimated values (flag E) and 2.47 for the 83 imputed values (flag I). The new value is above the estimate for 46 of the 110 values. The miss is more than 3 times for 6 of the 110 values.
+The multiplier for a held share of 90% is the smallest multiplier that holds 90% of the values. It is 2.50 for all 110 values. It is 4.19 for the 25 estimated values (flag E) and 2.50 for the 83 imputed values (flag I). The other 2 values have the flag X. The new value is above the estimate for 46 of the 110 values. The miss is more than 3 times for 6 of the 110 values.
 
 ### World totals
 
-The test has 185 years of World totals in the 3 previous versions. The range held all of them. Only 3 years have the age 0, one for each previous version. In these 3 years, the new World total is more than the previous World total by 8.7%, 6.1% and 3.5%. The ranges are 13.1%, 13.5% and 20.1% above and below the previous World total.
+The test has 185 years of World totals in the 3 previous versions. The range held all of them. Only 3 years have the age 0, one for each previous version. In these 3 years, the new World total is more than the previous World total by 8.7%, 6.1% and 3.5%. The ranges are 13.1%, 13.7% and 20.1% above and below the previous World total.
 
 ## Limits
 
